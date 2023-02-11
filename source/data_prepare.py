@@ -13,7 +13,7 @@ from googleapiclient.errors import HttpError
 
 
 def setup_dataset(name):
-    creds = Credentials.from_authorized_user_file('client_secret.json')
+    creds = Credentials.from_authorized_user_file('../client_secret.json')
     parent_folder = []
     sub_folders = []
 
