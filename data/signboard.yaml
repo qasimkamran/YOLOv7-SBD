@@ -1,0 +1,7 @@
+train: ../dataset/train/images
+val: ../dataset/val/images
+test: ../dataset/test/images
+
+# Classes
+nc: 1  # number of classes
+names: ['signboard']  # class names

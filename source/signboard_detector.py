@@ -3,7 +3,7 @@ This file wraps YOLOv7 scripts in abstracted functions.
 The one-stop-shop for all network functionality on this repository.
 '''
 
-import yolov7
+from yolov7_package import Yolov7Detector
 
 
 class SignboardDetector:
@@ -11,8 +11,9 @@ class SignboardDetector:
 
     def __init__(self, weights=None):
         assert weights is not None, f'Must specify model weights'
-        self.network = yolov7.load(weights)
-        print('Successfully loaded model!')
+
+        self.network = Yolov7Detector()
+        print('Successfully initialised network!')
         pass
 
     def ensure_data_integrity(self):
@@ -21,7 +22,7 @@ class SignboardDetector:
 
     def train_model(self):
         # Training yolov7
-        print('Train')
+        self.network.train()
 
     def test_model(self):
         # Testing yolov7
