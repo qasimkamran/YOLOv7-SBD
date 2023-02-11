@@ -1,4 +1,4 @@
-from 'source/signboard_detector.py' import SBDNetwork
+from signboard_detector import SignboardDetector
 
 if __name__ == '__main__':
-    network = SBDNetwork()
+    detector = SignboardDetector('yolov7/yolov7.pt')

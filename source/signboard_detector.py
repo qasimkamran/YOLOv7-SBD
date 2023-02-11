@@ -5,19 +5,24 @@ The one-stop-shop for all network functionality on this repository.
 
 import yolov7
 
-class SignboardDetector:
 
+class SignboardDetector:
     network = None
 
     def __init__(self, weights=None):
+        assert weights is not None, f'Must specify model weights'
         self.network = yolov7.load(weights)
+        print('Successfully loaded model!')
         pass
 
-    def ensure_data_integrity()
-        # Ensuring that dataset is in certain format
+    def ensure_data_integrity(self):
+        # Ensuring that the dataset is in valid format
+        print('Ensure data integrity')
 
-    def train_model():
+    def train_model(self):
         # Training yolov7
+        print('Train')
 
-    def test_model():
+    def test_model(self):
         # Testing yolov7
+        print('Test')
