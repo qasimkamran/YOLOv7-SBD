@@ -7,4 +7,4 @@ if __name__ == '__main__':
 
     creator = SignboardCreator(prediction_path='/home/qasimk/YOLOv7-SBD/yolov7/runs/detect/exp6/blank_input.png',
                                label_path='/home/qasimk/YOLOv7-SBD/yolov7/runs/detect/exp6/labels/blank_input.txt')
-    creator.show_prediction('Prediction')
+    creator.list_from_labels_string(creator.labels)
