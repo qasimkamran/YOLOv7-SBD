@@ -11,12 +11,12 @@ class SignboardDetector:
     network = None
 
     # Yaml directories
-    HYP_DIR = 'hyp'
-    DATA_DIR = 'data'
-    CFG_DIR = 'cfg'
+    HYP_DIR = os.path.abspath('hyp')
+    DATA_DIR = os.path.abspath('data')
+    CFG_DIR = os.path.abspath('cfg')
 
     # Results directories
-    RESULTS_DIR = 'results'
+    RESULTS_DIR = os.path.abspath('results')
 
     def __init__(self):
         self.network = Yolov7Detector()
@@ -40,6 +40,6 @@ class SignboardDetector:
                            hyp=hyp,
                            data=data)
 
-    def test_model(self):
+    def make_prediction(self):
         # Testing yolov7
         print('Test')
