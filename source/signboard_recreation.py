@@ -63,9 +63,9 @@ class SignboardCreator:
 
         return labels_list
 
-    def highlight_crops(self):
+    def highlight_crops(self, boxes):
         # Loop over the boxes and draw them on the image
-        for box in self.labels:
+        for box in boxes:
             # Extract the bounding box coordinates
             class_id, x_center, y_center, width, height = box
             x1 = int((x_center - width / 2) * self.prediction.shape[1])
