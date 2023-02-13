@@ -7,12 +7,15 @@ import cv2
 import os
 import numpy as np
 from PIL import Image
+import matplotlib
+matplotlib.use("TkAgg")
+import matplotlib.pyplot as plt
 
 class SignboardCreator:
 
-    labels = None
+    labels = []
     prediction = None
-    image_crops = None
+    image_crops = []
 
     def __init__(self, label_path, prediction_path):
         assert os.path.exists(label_path), f'Incorrect file path: {label_path}'
@@ -64,11 +67,11 @@ class SignboardCreator:
 
         return labels_list
 
-    def highlight_crops(self):
-        prediction_copy = self.prediction
-
+    def set_image_crops(self):
         # Loop over the boxes and draw them on the image
         for box in self.labels:
+            prediction_copy = np.copy(self.prediction)
+
             # Extract the bounding box coordinates
             class_id, x_center, y_center, width, height = box
             x1 = int((x_center - width / 2) * prediction_copy.shape[1])
@@ -76,8 +79,31 @@ class SignboardCreator:
             x2 = int((x_center + width / 2) * prediction_copy.shape[1])
             y2 = int((y_center + height / 2) * prediction_copy.shape[0])
 
-            # Draw the bounding box on the image
-            cv2.rectangle(prediction_copy, (x1, y1), (x2, y2), (0, 0, 0), 2)
+            prediction_copy = prediction_copy[y1:y2, x1:x2]
 
-        # Return the image with the bounding boxes drawn
-        return prediction_copy
+            assert 0 not in prediction_copy.shape, f'Invalid crop made'
+
+            self.image_crops.append(prediction_copy)
+
+        assert len(self.image_crops) == len(self.labels), f'Image crops length: {len(self.image_crops)} ' \
+                                                          f'not equal to ' \
+                                                          f'labels length: {len(self.labels)}'
+
+    def plot_image_crops(self):
+        assert self.image_crops, f'Image crops not set'
+
+        nimages = len(self.image_crops)
+
+        # Display nimages for rows until they equal or exceed 5 in number
+        nrows = nimages
+        if nimages >= 5:
+            nrows = 5
+
+        ncols = int(np.ceil(nimages / nrows))
+
+        fig, axs = plt.subplots(nrows, ncols, figsize=(20, 20))
+        axs = axs.ravel()
+        for i, img in enumerate(self.image_crops):
+            axs[i].imshow(img)
+            axs[i].axis('off')
+        plt.show()
