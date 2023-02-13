@@ -19,17 +19,18 @@ class SignboardCreator:
         assert os.path.exists(prediction_path), f'Incorrect file path: {prediction_path}'
 
         with open(label_path) as file:
-            self.labels = file.read()
-            print('Read prediction labels as list of strings')
+            self.labels = self.list_from_labels_string(file.read())
+            print('Read prediction labels as list')
 
         with Image.open(prediction_path) as image:
             self.prediction = np.array(image)
             print('Read prediction image as np array')
         pass
 
-    def show_prediction(self, win_name):
-        print(self.labels)
-        cv2.imshow(win_name, self.prediction)
+    def show(self, win_name, mat=None):
+        if mat is None:
+            mat = self.prediction
+        cv2.imshow(win_name, mat)
         cv2.waitKey(0)
         cv2.destroyWindow(win_name)
 
@@ -63,18 +64,20 @@ class SignboardCreator:
 
         return labels_list
 
-    def highlight_crops(self, boxes):
+    def highlight_crops(self):
+        prediction_copy = self.prediction
+
         # Loop over the boxes and draw them on the image
-        for box in boxes:
+        for box in self.labels:
             # Extract the bounding box coordinates
             class_id, x_center, y_center, width, height = box
-            x1 = int((x_center - width / 2) * self.prediction.shape[1])
-            y1 = int((y_center - height / 2) * self.prediction.shape[0])
-            x2 = int((x_center + width / 2) * self.prediction.shape[1])
-            y2 = int((y_center + height / 2) * self.prediction.shape[0])
+            x1 = int((x_center - width / 2) * prediction_copy.shape[1])
+            y1 = int((y_center - height / 2) * prediction_copy.shape[0])
+            x2 = int((x_center + width / 2) * prediction_copy.shape[1])
+            y2 = int((y_center + height / 2) * prediction_copy.shape[0])
 
             # Draw the bounding box on the image
-            cv2.rectangle(self.prediction, (x1, y1), (x2, y2), (0, 0, 0), 2)
+            cv2.rectangle(prediction_copy, (x1, y1), (x2, y2), (0, 0, 0), 2)
 
         # Return the image with the bounding boxes drawn
-        return self.prediction
+        return prediction_copy
