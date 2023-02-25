@@ -107,3 +107,22 @@ class SignboardCreator:
             axs[i].imshow(img)
             axs[i].axis('off')
         plt.show()
+
+    def apply_canny_edge_detection(self, mat):
+        assert mat is not None, f'Function argument cannot be None'
+        grayscale_mat = cv2.cvtColor(mat, cv2.COLOR_BGR2GRAY)
+        edge_map = cv2.Canny(grayscale_mat, 200, 250)  # Apply Canny edge detection
+        return edge_map
+
+    def apply_threshold_to_edge_map(self, edge_map):
+        assert edge_map is not None, f'Function argument cannot be None'
+        # Apply a binary threshold to convert the edge map to a binary image
+        threshold_value = 50  # adjust this value as needed
+        _, binary = cv2.threshold(edge_map, threshold_value, 255, cv2.THRESH_BINARY)
+        return binary
+
+    def create_edge_map(self, mat):
+        assert mat is not None, f'Function argument cannot be None'
+        edge_map = self.apply_canny_edge_detection(mat)
+        output_map = self.apply_threshold_to_edge_map(edge_map)
+        return output_map
