@@ -108,21 +108,39 @@ class SignboardCreator:
             axs[i].axis('off')
         plt.show()
 
-    def apply_canny_edge_detection(self, mat):
+    def get_canny_edge_detection(self, mat):
         assert mat is not None, f'Function argument cannot be None'
-        grayscale_mat = cv2.cvtColor(mat, cv2.COLOR_BGR2GRAY)
-        edge_map = cv2.Canny(grayscale_mat, 200, 250)  # Apply Canny edge detection
-        return edge_map
+        grayscale_map = cv2.cvtColor(mat, cv2.COLOR_BGR2GRAY)
+        canny_edge_map = cv2.Canny(grayscale_map, 100, 150)  # Apply Canny edge detection
+        return canny_edge_map
 
-    def apply_threshold_to_edge_map(self, edge_map):
+    def get_laplacian_edge_detection(self, mat):
+        assert mat is not None, f'Function argument cannot be None'
+        grayscale_map = cv2.cvtColor(mat, cv2.COLOR_BGR2GRAY)
+        laplacian_edge_map = cv2.Laplacian(grayscale_map, cv2.CV_64F)  # Apply Laplacian edge detection
+        laplacian_edge_map = np.uint8(np.absolute(laplacian_edge_map))  # Convert the edge map to unsigned 8-bit integer format
+        return laplacian_edge_map
+
+    def get_threshold_edge_detection(self, edge_map):
         assert edge_map is not None, f'Function argument cannot be None'
         # Apply a binary threshold to convert the edge map to a binary image
         threshold_value = 50  # adjust this value as needed
         _, binary = cv2.threshold(edge_map, threshold_value, 255, cv2.THRESH_BINARY)
         return binary
 
-    def create_edge_map(self, mat):
-        assert mat is not None, f'Function argument cannot be None'
-        edge_map = self.apply_canny_edge_detection(mat)
-        output_map = self.apply_threshold_to_edge_map(edge_map)
-        return output_map
+    def apply_hough_transform(self, mat):
+        canny_edge_map = self.get_canny_edge_detection(mat)
+        threshold_edge_map = self.get_threshold_edge_detection(canny_edge_map)
+
+        # Perform Hough transform to detect lines
+        lines = cv2.HoughLines(threshold_edge_map, rho=1, theta=np.pi / 360, threshold=100)
+
+        # Draw the detected lines on the original image
+        if lines is not None:
+            for line in lines:
+                rho, theta = line[0]
+                a, b = np.cos(theta), np.sin(theta)
+                x0, y0 = a * rho, b * rho
+                pt1 = (int(x0 + 1000 * (-b)), int(y0 + 1000 * (a)))
+                pt2 = (int(x0 - 1000 * (-b)), int(y0 - 1000 * (a)))
+                cv2.line(mat, pt1, pt2, (0, 0, 255), 2)
