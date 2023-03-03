@@ -7,12 +7,14 @@ import cv2
 import os
 import numpy as np
 from PIL import Image
+
 import matplotlib
+
 matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 
-class SignboardCreator:
 
+class SignboardCreator:
     labels = []
     prediction = None
     image_crops = []
