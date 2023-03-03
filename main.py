@@ -1,3 +1,4 @@
+import cv2
 import numpy as np
 
 from signboard_detector import SignboardDetector
@@ -12,7 +13,9 @@ if __name__ == '__main__':
 
     creator.set_image_crops()
     for i in range(len(creator.image_crops)):
-        # creator.image_crops[i] = creator.get_laplacian_edge_detection(creator.image_crops[i])
-        # creator.image_crops[i] = creator.get_threshold_edge_detection(canny_edge_map)
-        creator.apply_hough_transform(creator.image_crops[i])
+        # denoised_map = creator.get_denoised_map(creator.image_crops[i])
+        # canny_edge_map = creator.get_canny_edge_map(denoised_map)
+        # dilation_map = creator.get_dilation_map(canny_edge_map)
+        # creator.image_crops[i] = creator.get_threshold_map(dilation_map)
+        creator.new_apply_hough_transform(creator.image_crops[i])
         creator.show('Crop {0}'.format(i), creator.image_crops[i])
