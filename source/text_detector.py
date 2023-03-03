@@ -3,6 +3,7 @@ import tensorflow as tf
 from keras import layers
 import numpy as np
 import cv2
+import bbox
 
 
 class EAST():
@@ -48,11 +49,7 @@ class EAST():
         """Preprocess the input image by resizing and normalizing the pixel values."""
         img = cv2.resize(img, self.IMAGE_SIZE)
         img = img.astype(np.float32) / 255.0
-        return img
-
-    def define_model(self):
-        model = keras.Sequential()
-
+        return img()
 
     def fcn(self, input):
         """Define the FCN layers."""
@@ -105,8 +102,8 @@ class EAST():
     def generate_anchor_boxes(self):
         """Generate a set of anchor boxes for each pixel in the feature map."""
         anchor_boxes = []
-        for scale in self.RPN_ANCHOR_SCALES:
-            for aspect_ratio in self.RPN_ASPECT_RATIOS:
+        for scale in self.SCALES:
+            for aspect_ratio in self.RATIOS:
                 width = scale * np.sqrt(aspect_ratio)
                 height = scale / np.sqrt(aspect_ratio)
                 x1 = -width / 2
@@ -119,8 +116,8 @@ class EAST():
     def proposal_layer(self, rpn_box_coords, rpn_box_scores, anchor_boxes):
         """Compute the proposal boxes and their scores."""
         # Compute the box coordinates and clip them to the image boundaries
-        proposals = box_utils.bbox_transform(anchor_boxes, rpn_box_coords)
-        proposals = box_utils.clip_boxes(proposals, tf.shape(rpn_box_scores)[1:3] * self.FEATURE_STRIDES)
+        proposals = self.bbox_transform(anchor_boxes, rpn_box_coords)
+        proposals = self.clip_boxes(proposals, tf.shape(rpn_box_scores)[1:3] * self.FEATURE_STRIDES)
 
         # Flatten the proposal boxes and their scores
         proposals = tf.reshape(proposals, [-1, 4])
@@ -145,4 +142,59 @@ class EAST():
 
         return rpn_proposal_boxes, rpn_proposal_scores
 
+    def bbox_transform(self, anchor_boxes, rpn_box_coords):
+        """Transforms anchor boxes to proposal boxes using RPN box coordinates.
 
+        Args:
+            anchor_boxes: numpy array of shape (num_anchors, 4) containing the coordinates
+                of the anchor boxes in the format (x1, y1, x2, y2).
+            rpn_box_coords: numpy array of shape (num_anchors, 4) containing the coordinates
+                of the RPN box coordinates in the format (dx, dy, dw, dh).
+
+        Returns:
+            proposals: numpy array of shape (num_anchors, 4) containing the coordinates
+                of the proposal boxes in the format (x1, y1, x2, y2).
+        """
+        x_center = (anchor_boxes[:, 2] + anchor_boxes[:, 0]) / 2
+        y_center = (anchor_boxes[:, 3] + anchor_boxes[:, 1]) / 2
+        width = anchor_boxes[:, 2] - anchor_boxes[:, 0]
+        height = anchor_boxes[:, 3] - anchor_boxes[:, 1]
+
+        # Calculate the proposals' coordinates
+        proposals_x_center = x_center + rpn_box_coords[:, 0] * width
+        proposals_y_center = y_center + rpn_box_coords[:, 1] * height
+        proposals_width = width * np.exp(rpn_box_coords[:, 2])
+        proposals_height = height * np.exp(rpn_box_coords[:, 3])
+
+        # Calculate the proposals' coordinates
+        proposals_x1 = proposals_x_center - proposals_width / 2
+        proposals_y1 = proposals_y_center - proposals_height / 2
+        proposals_x2 = proposals_x_center + proposals_width / 2
+        proposals_y2 = proposals_y_center + proposals_height / 2
+
+        proposals = np.stack([proposals_x1, proposals_y1, proposals_x2, proposals_y2], axis=1)
+
+        return proposals
+
+    def clip_boxes(self, boxes, image_shape):
+        """
+        Clips boxes to image boundaries.
+        Args:
+            boxes: numpy array of shape [N, 4] containing the coordinates of N boxes
+            image_shape: tuple or list of length 2 or 3, containing the height and width of the image
+        Returns:
+            A numpy array of the same shape as boxes, with the coordinates clipped to the image boundaries
+        """
+        boxes = np.asarray(boxes)
+        image_shape = np.asarray(image_shape)
+
+        # Compute the minimum and maximum values for each dimension
+        ymin = np.maximum(boxes[:, 0], 0)
+        xmin = np.maximum(boxes[:, 1], 0)
+        ymax = np.minimum(boxes[:, 2], image_shape[0])
+        xmax = np.minimum(boxes[:, 3], image_shape[1])
+
+        # Combine the values to form the new boxes
+        clipped_boxes = np.stack([ymin, xmin, ymax, xmax], axis=-1)
+
+        return clipped_boxes
