@@ -24,37 +24,6 @@ class EAST():
     # Bilinear resize factor
     RESIZE_FACTOR = 2
 
-    # Define the RPN parameters
-    RPN_KERNEL_SIZE = (3, 3)
-    RPN_PADDING = 'same'
-    RPN_FILTERS = 128
-    RPN_CHANNELS = 512
-    RPN_BOXES_PER_LOCATION = 9
-    RPN_NUM_ANCHORS = RPN_BOXES_PER_LOCATION * 2
-
-    # Define the binary classifier parameters
-    BINARY_KERNEL_SIZE = (1, 1)
-    BINARY_PADDING = 'valid'
-    BINARY_FILTERS = 64
-
-    # Define the non-maximum suppression (NMS) parameters
-    NMS_THRESH = 0.4
-    NMS_MAX_BOXES = 100
-
-    # Anchor box settings
-    RATIOS = [0.5, 1, 2]
-    SCALES = [128, 256, 512]
-    FEATURE_STRIDES = [4, 8, 16, 32, 64]
-
-    # Proposal generation settings
-    RPN_PRE_NMS_TOP_N = 1000
-    RPN_POST_NMS_TOP_N = 300
-    RPN_NMS_THRESH = 0.7
-    RPN_BOX_SCORE_THRESH = 0.5
-
-    # Box transformation settings
-    BBOX_STD_DEV = np.array([0.1, 0.1, 0.2, 0.2], dtype=np.float32)
-
     def preprocess(self, img):
         """Preprocess the input image by resizing and normalizing the pixel values."""
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
