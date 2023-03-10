@@ -1,21 +1,29 @@
 import keras
+from keras.preprocessing.image import ImageDataGenerator
+from tensorflow.python.data import AUTOTUNE
 from keras import layers, models, Input
 from keras.applications.resnet import ResNet50
+from keras.losses import MeanSquaredError
+from keras.optimizers import Adam
 import keras.backend as K
 import tensorflow as tf
 import numpy as np
-import cv2
 import deeplake
+import cv2
 
 
 class EAST():
     model = None
+    tf_dataset = None
 
     def __init__(self, img):
-        self.make_model()
-        assert self.model is not None, f'Model unset'
-        score_map, rbox_map = self.predict(img)
-        self.plot_prediction(img, score_map, rbox_map)
+        train_datagen = ImageDataGenerator(rescale=1. / 255,
+                                           height_shift_range=0.05,
+                                           width_shift_range=0.05)
+        test_datagen = ImageDataGenerator(rescale=1. / 255)
+        val_datagen = ImageDataGenerator(rescale=1. / 255)
+
+        self.save_dataset()
         pass
 
     # Define the input size
@@ -24,16 +32,54 @@ class EAST():
     # Bilinear resize factor
     RESIZE_FACTOR = 2
 
-    def preprocess(self, img):
+    def save_dataset(self):
+        # Load dataset from deeplake
+        dataset = deeplake.load("hub://activeloop/icdar-2013-text-localize-train")
+        self.tf_dataset = dataset.tensorflow()
+
+        # Iterate over the dataset preprocessing it's contents and forming numpy arrays
+        iterator = iter(self.tf_dataset)
+        images = []
+        boxes = []
+        for element in iterator:
+            image, box = self.preprocess(element)
+            images.append(image)
+            boxes.append(box)
+        boxes = self.homogenize_array(boxes)  # Inhomogeneous array boxes passed
+        images = np.array(images)
+
+        # Saving numpy arrays externally for faster access in subsequent runs
+        np.save('../np_data/images.npy')
+        print('Saving numpy array for images of shape:', images.shape)
+        np.save('../np_data/boxes.npy')
+        print('Saving numpy array for boxes of shape:', boxes.shape)
+
+    def homogenize_array(self, array):
+        # Get the maximum number of elements
+        max_elements = max([element.shape[0] for element in array])
+        # Pad all the individual arrays with zeros
+        for i in range(len(array)):
+            num_elements = array[i].shape[0]
+            if num_elements < max_elements:
+                pad_width = ((0, max_elements - num_elements), (0, 0))
+                array[i] = np.pad(array[i], pad_width, mode='constant')
+        # Convert the boxes array to a numpy array
+        result = np.array(array)
+        return result
+
+    def preprocess(self, tensor):
         """Preprocess the input image by resizing and normalizing the pixel values."""
+        box = tensor['boxes/box'].numpy()
+        img = tensor['images'].numpy()
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img = cv2.resize(img, (self.INPUT_SIZE, self.INPUT_SIZE))
         img = np.expand_dims(img, axis=0)  # Add batch dimension
         img = img.astype(np.float32) / 255.0
-        return img
+        return img, box
 
     def resize_bilinear(self, layer):
-        return tf.image.resize(layer, size=[K.int_shape(layer)[1] * self.RESIZE_FACTOR, K.int_shape(layer)[2] * self.RESIZE_FACTOR])
+        return tf.image.resize(layer, size=[K.int_shape(layer)[1] * self.RESIZE_FACTOR,
+                                            K.int_shape(layer)[2] * self.RESIZE_FACTOR])
 
     def make_model(self):
         input_tensor = Input(shape=(self.INPUT_SIZE, self.INPUT_SIZE, 3), name='input_t')
@@ -54,11 +100,13 @@ class EAST():
         stem_tensor_32 = layers.Lambda(self.resize_bilinear, name='stem_1')(fusion_tensor_16)
         concat_block_1 = K.concatenate([stem_tensor_32, fusion_tensor_32], axis=3)
 
-        conv1x1_block_1 = layers.Conv2D(128, (1, 1), padding='same', kernel_regularizer=keras.regularizers.l2(1e-5))(concat_block_1)
+        conv1x1_block_1 = layers.Conv2D(128, (1, 1), padding='same', kernel_regularizer=keras.regularizers.l2(1e-5))(
+            concat_block_1)
         batchnorm1_block_1 = layers.BatchNormalization(momentum=0.997, epsilon=1e-5, scale=True)(conv1x1_block_1)
         activation1_block_1 = layers.Activation('relu')(batchnorm1_block_1)
 
-        conv3x3_block1 = layers.Conv2D(128, (3, 3), padding='same', kernel_regularizer=keras.regularizers.l2(1e-5))(activation1_block_1)
+        conv3x3_block1 = layers.Conv2D(128, (3, 3), padding='same', kernel_regularizer=keras.regularizers.l2(1e-5))(
+            activation1_block_1)
         batchnorm2_block_1 = layers.BatchNormalization(momentum=0.997, epsilon=1e-5, scale=True)(conv3x3_block1)
         activation2_block_1 = layers.Activation('relu')(batchnorm2_block_1)
 
@@ -67,11 +115,13 @@ class EAST():
         stem_tensor_64 = layers.Lambda(self.resize_bilinear, name='stem_2')(activation2_block_1)
         concat_block_2 = K.concatenate([stem_tensor_64, fusion_tensor_64], axis=3)
 
-        conv1x1_block_2 = layers.Conv2D(128, (1, 1), padding='same', kernel_regularizer=keras.regularizers.l2(1e-5))(concat_block_2)
+        conv1x1_block_2 = layers.Conv2D(128, (1, 1), padding='same', kernel_regularizer=keras.regularizers.l2(1e-5))(
+            concat_block_2)
         batchnorm1_block_2 = layers.BatchNormalization(momentum=0.997, epsilon=1e-5, scale=True)(conv1x1_block_2)
         activation1_block_2 = layers.Activation('relu')(batchnorm1_block_2)
 
-        conv3x3_block1 = layers.Conv2D(128, (3, 3), padding='same', kernel_regularizer=keras.regularizers.l2(1e-5))(activation1_block_2)
+        conv3x3_block1 = layers.Conv2D(128, (3, 3), padding='same', kernel_regularizer=keras.regularizers.l2(1e-5))(
+            activation1_block_2)
         batchnorm2_block_2 = layers.BatchNormalization(momentum=0.997, epsilon=1e-5, scale=True)(conv3x3_block1)
         activation2_block_2 = layers.Activation('relu')(batchnorm2_block_2)
 
@@ -80,17 +130,20 @@ class EAST():
         stem_tensor_128 = layers.Lambda(self.resize_bilinear, name='stem_3')(activation2_block_2)
         concat_block_3 = K.concatenate([stem_tensor_128, fusion_tensor_128], axis=3)
 
-        conv1x1_block_3 = layers.Conv2D(128, (1, 1), padding='same', kernel_regularizer=keras.regularizers.l2(1e-5))(concat_block_3)
+        conv1x1_block_3 = layers.Conv2D(128, (1, 1), padding='same', kernel_regularizer=keras.regularizers.l2(1e-5))(
+            concat_block_3)
         batchnorm1_block_3 = layers.BatchNormalization(momentum=0.997, epsilon=1e-5, scale=True)(conv1x1_block_3)
         activation1_block_3 = layers.Activation('relu')(batchnorm1_block_3)
 
-        conv3x3_block1 = layers.Conv2D(128, (3, 3), padding='same', kernel_regularizer=keras.regularizers.l2(1e-5))(activation1_block_3)
+        conv3x3_block1 = layers.Conv2D(128, (3, 3), padding='same', kernel_regularizer=keras.regularizers.l2(1e-5))(
+            activation1_block_3)
         batchnorm2_block_3 = layers.BatchNormalization(momentum=0.997, epsilon=1e-5, scale=True)(conv3x3_block1)
         activation2_block_3 = layers.Activation('relu')(batchnorm2_block_3)
 
         # Output
 
-        ultimate_conv = layers.Conv2D(32, (3, 3), padding='same', kernel_regularizer=keras.regularizers.l2(1e-5), activation='relu')(activation2_block_3)
+        ultimate_conv = layers.Conv2D(32, (3, 3), padding='same', kernel_regularizer=keras.regularizers.l2(1e-5),
+                                      activation='relu')(activation2_block_3)
 
         score_map = layers.Conv2D(1, (1, 1), activation='sigmoid', name='score_map')(ultimate_conv)
 
