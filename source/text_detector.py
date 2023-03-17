@@ -1,3 +1,5 @@
+import os.path
+
 import keras
 from keras.preprocessing.image import ImageDataGenerator
 from tensorflow.python.data import AUTOTUNE
@@ -14,7 +16,9 @@ import cv2
 
 class EAST():
     model = None
-    tf_dataset = None
+    images_data = None
+    boxes_data = None
+
 
     def __init__(self, img):
         train_datagen = ImageDataGenerator(rescale=1. / 255,
@@ -23,7 +27,9 @@ class EAST():
         test_datagen = ImageDataGenerator(rescale=1. / 255)
         val_datagen = ImageDataGenerator(rescale=1. / 255)
 
-        self.save_dataset()
+        # self.save_dataset()
+        self.images_data, self.boxes_data = self.load_dataset()
+        self.display_data_batch()
         pass
 
     # Define the input size
@@ -32,13 +38,25 @@ class EAST():
     # Bilinear resize factor
     RESIZE_FACTOR = 2
 
+    def load_dataset(self):
+        # Check if saved before loading
+        os.path.isdir('../np_data')
+        os.path.isfile('../np_data/images.npy')
+        os.path.isfile('../np_data/boxes.npy')
+
+        images_data = np.load('np_data/images.npy')
+        print('Loaded images data')
+        boxes_data = np.load('np_data/boxes.npy')
+        print('Loaded bounding box data')
+        return images_data, boxes_data
+
     def save_dataset(self):
         # Load dataset from deeplake
         dataset = deeplake.load("hub://activeloop/icdar-2013-text-localize-train")
-        self.tf_dataset = dataset.tensorflow()
+        tf_dataset = dataset.tensorflow()
 
         # Iterate over the dataset preprocessing it's contents and forming numpy arrays
-        iterator = iter(self.tf_dataset)
+        iterator = iter(tf_dataset)
         images = []
         boxes = []
         for element in iterator:
@@ -49,9 +67,9 @@ class EAST():
         images = np.array(images)
 
         # Saving numpy arrays externally for faster access in subsequent runs
-        np.save('../np_data/images.npy')
+        np.save('np_data/images.npy', images)
         print('Saving numpy array for images of shape:', images.shape)
-        np.save('../np_data/boxes.npy')
+        np.save('np_data/boxes.npy', boxes)
         print('Saving numpy array for boxes of shape:', boxes.shape)
 
     def homogenize_array(self, array):
@@ -67,12 +85,27 @@ class EAST():
         result = np.array(array)
         return result
 
+    def display_data_batch(self):
+        for i in range(0, 100):
+            img = self.images_data[i][0]
+            for j in range(0, 19):
+                x1, y1, x2, y2 = self.boxes_data[i][j]
+                cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
+            cv2.imshow('sample_{i}', img)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+
     def preprocess(self, tensor):
         """Preprocess the input image by resizing and normalizing the pixel values."""
         box = tensor['boxes/box'].numpy()
         img = tensor['images'].numpy()
+
+        h, w = img.shape[:2]
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
         img = cv2.resize(img, (self.INPUT_SIZE, self.INPUT_SIZE))
+        box = box * [self.INPUT_SIZE / w, self.INPUT_SIZE / h, self.INPUT_SIZE / w, self.INPUT_SIZE / h]
+
         img = np.expand_dims(img, axis=0)  # Add batch dimension
         img = img.astype(np.float32) / 255.0
         return img, box
