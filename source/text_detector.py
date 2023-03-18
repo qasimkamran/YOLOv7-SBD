@@ -19,7 +19,6 @@ class EAST():
     images_data = None
     boxes_data = None
 
-
     def __init__(self, img):
         train_datagen = ImageDataGenerator(rescale=1. / 255,
                                            height_shift_range=0.05,
@@ -29,7 +28,14 @@ class EAST():
 
         # self.save_dataset()
         self.images_data, self.boxes_data = self.load_dataset()
-        self.display_data_batch()
+
+        train_gen = train_datagen.flow(self.images_data, self.boxes_data)
+
+        self.make_model()
+
+        self.model.compile(optimizer=tf.optimizers.legacy.Adam(), loss=['binary_crossentropy', 'mse'])
+
+        self.model.fit_generator(train_gen)
         pass
 
     # Define the input size
@@ -67,6 +73,9 @@ class EAST():
         images = np.array(images)
 
         # Saving numpy arrays externally for faster access in subsequent runs
+        if not os.path.exists('np_data'):
+            os.mkdir('np_data')
+
         np.save('np_data/images.npy', images)
         print('Saving numpy array for images of shape:', images.shape)
         np.save('np_data/boxes.npy', boxes)
@@ -101,12 +110,10 @@ class EAST():
         img = tensor['images'].numpy()
 
         h, w = img.shape[:2]
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
         img = cv2.resize(img, (self.INPUT_SIZE, self.INPUT_SIZE))
         box = box * [self.INPUT_SIZE / w, self.INPUT_SIZE / h, self.INPUT_SIZE / w, self.INPUT_SIZE / h]
 
-        img = np.expand_dims(img, axis=0)  # Add batch dimension
         img = img.astype(np.float32) / 255.0
         return img, box
 
@@ -191,6 +198,52 @@ class EAST():
         model = models.Model(inputs=input_tensor, outputs=[score_map, rbox_map])
 
         self.model = model
+
+    def east_loss(self, y_true, y_pred, alpha=1.0):
+        """
+        Computes the custom loss function for the EAST algorithm.
+
+        Arguments:
+        y_true -- Tensor of shape (batch_size, H, W, 5) containing the ground truth label
+                  for each anchor box, where H and W are the height and width of the feature map.
+                  The last dimension contains the binary score map (1 channel) and the target
+                  geometry map (4 channels, representing the offsets of the predicted box
+                  coordinates relative to the anchor box coordinates).
+        y_pred -- Tensor of shape (batch_size, H, W, 6) containing the predicted output for
+                  each anchor box, where the last dimension contains the binary score map
+                  (1 channel) and the predicted geometry map (5 channels, representing the
+                  offsets of the predicted box coordinates relative to the anchor box
+                  coordinates and the angle of rotation).
+        alpha -- Scalar value for the weight of the first term in the loss function.
+
+        Returns:
+        A scalar Tensor representing the total loss value.
+        """
+
+        # Extract the binary score map and the target geometry map from the ground truth label
+        print(y_true)
+        print(y_pred)
+
+        y_true_score = y_true[:, :, :, 0:1]  # Shape (batch_size, H, W, 1)
+        y_true_geo = y_true[:, :, :, 1:5]  # Shape (batch_size, H, W, 4)
+
+        # Extract the binary score map and the predicted geometry map from the model's output
+        y_pred_score = y_pred[:, :, :, 0:1]  # Shape (batch_size, H, W, 1)
+        y_pred_geo = y_pred[:, :, :, 1:6]  # Shape (batch_size, H, W, 5)
+
+        # Compute the binary cross-entropy loss between the predicted and ground truth score maps
+        loss_score = tf.keras.backend.binary_crossentropy(y_true_score, y_pred_score)
+
+        # Compute the smooth L1 loss between the predicted and ground truth geometry maps
+        diff = tf.abs(y_true_geo - y_pred_geo)
+        less_than_one = tf.cast(tf.less(diff, 1.0), tf.float32)
+        loss_geom = (less_than_one * 0.5 * diff ** 2) + (1 - less_than_one) * (diff - 0.5)
+
+        # Compute the total loss as a weighted sum of the two terms
+        loss = alpha * loss_score + (1 - alpha) * loss_geom
+
+        # Take the mean loss across all samples in the batch and return it
+        return tf.reduce_mean(loss)
 
     def predict(self, img):
         # Run inference on a single image.
