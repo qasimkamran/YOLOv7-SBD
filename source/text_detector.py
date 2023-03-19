@@ -1,17 +1,14 @@
 import os.path
-
 import keras
 from keras.preprocessing.image import ImageDataGenerator
-from tensorflow.python.data import AUTOTUNE
 from keras import layers, models, Input
 from keras.applications.resnet import ResNet50
-from keras.losses import MeanSquaredError
-from keras.optimizers import Adam
 import keras.backend as K
 import tensorflow as tf
 import numpy as np
 import deeplake
 import cv2
+import math
 
 
 class EAST():
@@ -26,6 +23,9 @@ class EAST():
         test_datagen = ImageDataGenerator(rescale=1. / 255)
         val_datagen = ImageDataGenerator(rescale=1. / 255)
 
+        os.environ["CUDA_VISIBLE_DEVICES"] = '0'
+        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
+
         # self.save_dataset()
         self.images_data, self.boxes_data = self.load_dataset()
 
@@ -33,9 +33,14 @@ class EAST():
 
         self.make_model()
 
-        self.model.compile(optimizer=tf.optimizers.legacy.Adam(), loss=['binary_crossentropy', 'mse'])
+        self.model.compile(optimizer=tf.optimizers.RMSprop(),
+                           loss=[self.score_loss, self.rbox_loss],
+                           run_eagerly=True)
 
-        self.model.fit_generator(train_gen)
+        self.model.fit(self.images_data, self.boxes_data, batch_size=1)
+
+
+        self.plot_prediction(self.predict(img))
         pass
 
     # Define the input size
@@ -61,7 +66,7 @@ class EAST():
         dataset = deeplake.load("hub://activeloop/icdar-2013-text-localize-train")
         tf_dataset = dataset.tensorflow()
 
-        # Iterate over the dataset preprocessing it's contents and forming numpy arrays
+        # Iterate over the dataset preprocessing its contents and forming numpy arrays
         iterator = iter(tf_dataset)
         images = []
         boxes = []
@@ -199,55 +204,107 @@ class EAST():
 
         self.model = model
 
-    def east_loss(self, y_true, y_pred, alpha=1.0):
-        """
-        Computes the custom loss function for the EAST algorithm.
+    def gt_box_to_score(self, box, width, height):
+        converted = np.zeros((box.shape[0], width, height))
+        for i in range(box.shape[0]):
+            for j in range(20):
+                if np.all(box[i, j] == 0):
+                    break
+                x1, y1, x2, y2 = box[i, j]
+                x1 = int(round(x1 * width / self.INPUT_SIZE))
+                y1 = int(round(y1 * height / self.INPUT_SIZE))
+                x2 = int(round(x2 * width / self.INPUT_SIZE))
+                y2 = int(round(y2 * height / self.INPUT_SIZE))
+                converted[i, y1:y2, x1:x2] = 1.0
+        return converted
 
-        Arguments:
-        y_true -- Tensor of shape (batch_size, H, W, 5) containing the ground truth label
-                  for each anchor box, where H and W are the height and width of the feature map.
-                  The last dimension contains the binary score map (1 channel) and the target
-                  geometry map (4 channels, representing the offsets of the predicted box
-                  coordinates relative to the anchor box coordinates).
-        y_pred -- Tensor of shape (batch_size, H, W, 6) containing the predicted output for
-                  each anchor box, where the last dimension contains the binary score map
-                  (1 channel) and the predicted geometry map (5 channels, representing the
-                  offsets of the predicted box coordinates relative to the anchor box
-                  coordinates and the angle of rotation).
-        alpha -- Scalar value for the weight of the first term in the loss function.
+    def gt_box_to_rbox(self, box, width, height):
+        # Normalize coordinates of bounding boxes
+        bbox_data_norm = box.copy()
+        bbox_data_norm[:, :, 0] /= self.INPUT_SIZE  # x_min
+        bbox_data_norm[:, :, 1] /= self.INPUT_SIZE  # y_min
+        bbox_data_norm[:, :, 2] /= self.INPUT_SIZE  # x_max
+        bbox_data_norm[:, :, 3] /= self.INPUT_SIZE  # y_max
 
-        Returns:
-        A scalar Tensor representing the total loss value.
-        """
+        # Add extra dimension to match batch size of model output
+        bbox_data_norm = np.expand_dims(bbox_data_norm, axis=0)
 
-        # Extract the binary score map and the target geometry map from the ground truth label
-        print(y_true)
-        print(y_pred)
+        # Create array of zeros with shape (batch_size, 128, 128, 5)
+        rbox_map = np.zeros((box.shape[0]-1, width, height, 5))
 
-        y_true_score = y_true[:, :, :, 0:1]  # Shape (batch_size, H, W, 1)
-        y_true_geo = y_true[:, :, :, 1:5]  # Shape (batch_size, H, W, 4)
+        # Insert normalized bounding box data into first four channels
+        rbox_map[:, :, :, 0] = bbox_data_norm[:, :, 0]  # x_min
+        rbox_map[:, :, :, 1] = bbox_data_norm[:, :, 1]  # y_min
+        rbox_map[:, :, :, 2] = bbox_data_norm[:, :, 2]  # x_max
+        rbox_map[:, :, :, 3] = bbox_data_norm[:, :, 3]  # y_max
 
-        # Extract the binary score map and the predicted geometry map from the model's output
-        y_pred_score = y_pred[:, :, :, 0:1]  # Shape (batch_size, H, W, 1)
-        y_pred_geo = y_pred[:, :, :, 1:6]  # Shape (batch_size, H, W, 5)
+        # Initialize fifth channel to zero
+        rbox_map[:, :, :, 4] = 0
 
-        # Compute the binary cross-entropy loss between the predicted and ground truth score maps
-        loss_score = tf.keras.backend.binary_crossentropy(y_true_score, y_pred_score)
+        return rbox_map
 
-        # Compute the smooth L1 loss between the predicted and ground truth geometry maps
-        diff = tf.abs(y_true_geo - y_pred_geo)
-        less_than_one = tf.cast(tf.less(diff, 1.0), tf.float32)
-        loss_geom = (less_than_one * 0.5 * diff ** 2) + (1 - less_than_one) * (diff - 0.5)
+    def bbox_to_rbox(self, bbox):
+        x1, y1, x2, y2 = bbox
+        cx = (x1 + x2) / 2
+        cy = (y1 + y2) / 2
+        w = x2 - x1
+        h = y2 - y1
+        theta = math.atan2(y2 - y1, x2 - x1)
+        rbox = [cx, cy, w, h, theta]
+        return rbox
 
-        # Compute the total loss as a weighted sum of the two terms
-        loss = alpha * loss_score + (1 - alpha) * loss_geom
+    def score_loss(self, y_true, y_pred):
+        y_true_np = y_true.numpy()
+        y_pred_np = y_pred.numpy()
 
-        # Take the mean loss across all samples in the batch and return it
-        return tf.reduce_mean(loss)
+        y_true_universal = self.gt_box_to_score(y_true_np, y_pred_np.shape[1], y_pred_np.shape[2])
+        y_true_universal_tensor = tf.convert_to_tensor(y_true_universal)
+        y_true_universal_tensor = tf.cast(y_true_universal_tensor, tf.float32)
+
+        loss = - (y_true_universal_tensor * tf.math.log(y_pred + 1e-10) + (1 - y_true_universal_tensor) * tf.math.log(1 - y_pred + 1e-10))
+        loss = tf.reduce_mean(loss, axis=[0, 1, 2])  # average over batch size and other dimensions
+
+        return loss
+
+    def rbox_loss(self, y_true, y_pred):
+        y_true_np = y_true.numpy()
+        y_pred_np = y_pred.numpy()
+
+        return  0
+
+        raise Exception
+
+        y_true_angle, y_true_h, y_true_w = tf.split(y_true, [1, 1, 1], axis=-1)
+        y_pred_angle, y_pred_h, y_pred_w = tf.split(y_pred, [1, 1, 1], axis=-1)
+
+        # Compute the sin and cos of the angle parameters
+        y_true_sin = tf.sin(y_true_angle)
+        y_true_cos = tf.cos(y_true_angle)
+        y_pred_sin = tf.sin(y_pred_angle)
+        y_pred_cos = tf.cos(y_pred_angle)
+
+        # Compute the smooth L1 loss for the angle parameter
+        angle_loss = tf.reduce_mean(tf.losses.huber_loss(y_true_sin, y_pred_sin) +
+                                    tf.losses.huber_loss(y_true_cos, y_pred_cos))
+
+        # Compute the smooth L1 loss for the height and width parameters
+        hw_loss = tf.reduce_mean(tf.losses.huber_loss(y_true_h, y_pred_h) +
+                                 tf.losses.huber_loss(y_true_w, y_pred_w))
+
+        # Compute the smooth L1 loss for the geometric parameter
+        y_true_geo = tf.concat([y_true_sin, y_true_cos, y_true_h, y_true_w], axis=-1)
+        y_pred_geo = tf.concat([y_pred_sin, y_pred_cos, y_pred_h, y_pred_w], axis=-1)
+        geo_loss = tf.reduce_mean(tf.losses.huber_loss(y_true_geo, y_pred_geo))
+
+        # Compute the total RBOX map loss
+        rbox_map_loss = angle_loss + hw_loss + geo_loss
+
+        return rbox_map_loss
 
     def predict(self, img):
         # Run inference on a single image.
-        img = self.preprocess(img)
+        img = cv2.resize(img, (self.INPUT_SIZE, self.INPUT_SIZE))
+        img = img.astype(np.float32) / 255.0
 
         # Make predictions
         score_map, rbox_map = self.model.predict(img)
