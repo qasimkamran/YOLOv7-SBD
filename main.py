@@ -10,4 +10,6 @@ if __name__ == '__main__':
                                label_path='/home/qasimk/YOLOv7-SBD/yolov7/runs/detect/exp6/labels/blank_input.txt')
     creator.set_image_crops()
 
-    east = EAST(creator.image_crops[1])
+    print(creator.image_crops[1].shape)
+
+    # east = EAST(creator.image_crops[1])
