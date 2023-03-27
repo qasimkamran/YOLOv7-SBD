@@ -1,9 +1,13 @@
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import keras
 from keras import layers, models, Input
 from keras.applications.resnet import ResNet50
 import keras.backend as K
 import tensorflow as tf
 import numpy as np
+os.environ['HSA_OVERRIDE_GFX_VERSION'] = '10.3.0'
+print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
 # Define the input size
 INPUT_SIZE = 512
@@ -37,11 +41,13 @@ class EAST:
         stem_tensor_32 = layers.Lambda(resize_bilinear, name='stem_1')(fusion_tensor_16)
         concat_block_1 = K.concatenate([stem_tensor_32, fusion_tensor_32], axis=3)
 
-        conv1x1_block_1 = layers.Conv2D(128, (1, 1), padding='same', kernel_regularizer=keras.regularizers.l2(1e-5))(concat_block_1)
+        conv1x1_block_1 = layers.Conv2D(128, (1, 1), padding='same', kernel_regularizer=keras.regularizers.l2(1e-5))(
+            concat_block_1)
         batchnorm1_block_1 = layers.BatchNormalization(momentum=0.997, epsilon=1e-5, scale=True)(conv1x1_block_1)
         activation1_block_1 = layers.Activation('relu')(batchnorm1_block_1)
 
-        conv3x3_block1 = layers.Conv2D(128, (3, 3), padding='same', kernel_regularizer=keras.regularizers.l2(1e-5))(activation1_block_1)
+        conv3x3_block1 = layers.Conv2D(128, (3, 3), padding='same', kernel_regularizer=keras.regularizers.l2(1e-5))(
+            activation1_block_1)
         batchnorm2_block_1 = layers.BatchNormalization(momentum=0.997, epsilon=1e-5, scale=True)(conv3x3_block1)
         activation2_block_1 = layers.Activation('relu')(batchnorm2_block_1)
 
@@ -50,11 +56,13 @@ class EAST:
         stem_tensor_64 = layers.Lambda(resize_bilinear, name='stem_2')(activation2_block_1)
         concat_block_2 = K.concatenate([stem_tensor_64, fusion_tensor_64], axis=3)
 
-        conv1x1_block_2 = layers.Conv2D(128, (1, 1), padding='same', kernel_regularizer=keras.regularizers.l2(1e-5))(concat_block_2)
+        conv1x1_block_2 = layers.Conv2D(128, (1, 1), padding='same', kernel_regularizer=keras.regularizers.l2(1e-5))(
+            concat_block_2)
         batchnorm1_block_2 = layers.BatchNormalization(momentum=0.997, epsilon=1e-5, scale=True)(conv1x1_block_2)
         activation1_block_2 = layers.Activation('relu')(batchnorm1_block_2)
 
-        conv3x3_block1 = layers.Conv2D(128, (3, 3), padding='same', kernel_regularizer=keras.regularizers.l2(1e-5))(activation1_block_2)
+        conv3x3_block1 = layers.Conv2D(128, (3, 3), padding='same', kernel_regularizer=keras.regularizers.l2(1e-5))(
+            activation1_block_2)
         batchnorm2_block_2 = layers.BatchNormalization(momentum=0.997, epsilon=1e-5, scale=True)(conv3x3_block1)
         activation2_block_2 = layers.Activation('relu')(batchnorm2_block_2)
 
@@ -63,17 +71,20 @@ class EAST:
         stem_tensor_128 = layers.Lambda(resize_bilinear, name='stem_3')(activation2_block_2)
         concat_block_3 = K.concatenate([stem_tensor_128, fusion_tensor_128], axis=3)
 
-        conv1x1_block_3 = layers.Conv2D(128, (1, 1), padding='same', kernel_regularizer=keras.regularizers.l2(1e-5))(concat_block_3)
+        conv1x1_block_3 = layers.Conv2D(128, (1, 1), padding='same', kernel_regularizer=keras.regularizers.l2(1e-5))(
+            concat_block_3)
         batchnorm1_block_3 = layers.BatchNormalization(momentum=0.997, epsilon=1e-5, scale=True)(conv1x1_block_3)
         activation1_block_3 = layers.Activation('relu')(batchnorm1_block_3)
 
-        conv3x3_block1 = layers.Conv2D(128, (3, 3), padding='same', kernel_regularizer=keras.regularizers.l2(1e-5))(activation1_block_3)
+        conv3x3_block1 = layers.Conv2D(128, (3, 3), padding='same', kernel_regularizer=keras.regularizers.l2(1e-5))(
+            activation1_block_3)
         batchnorm2_block_3 = layers.BatchNormalization(momentum=0.997, epsilon=1e-5, scale=True)(conv3x3_block1)
         activation2_block_3 = layers.Activation('relu')(batchnorm2_block_3)
 
         # Output
 
-        ultimate_conv = layers.Conv2D(32, (3, 3), padding='same', kernel_regularizer=keras.regularizers.l2(1e-5), activation='relu')(activation2_block_3)
+        ultimate_conv = layers.Conv2D(32, (3, 3), padding='same', kernel_regularizer=keras.regularizers.l2(1e-5),
+                                      activation='relu')(activation2_block_3)
 
         score_map = layers.Conv2D(1, (1, 1), activation='sigmoid', name='score_map')(ultimate_conv)
 
