@@ -37,12 +37,15 @@ def plot_east_prediction(img, score_map, rbox_map):
     for i in range(rbox_map.shape[0]):
         for j in range(rbox_map.shape[1]):
             for k in range(rbox_map.shape[2]):
-                if np.any(score_map[i, j, k] > 0.1):  # Only draw boxes with score > 0.5
-                    # cv2.circle(img, (j, k), 1, (0, 0, 255), -1)
+                if np.any(score_map[i, j, k] > 0.01):  # Only draw boxes with score > 0.5
+                    print(score_map[i, j, k])
+                    cv2.circle(img, (j, k), 1, (0, 0, 255), -1)
+                    '''
                     x, y, h, w, angle = rbox_map[i, j, k]
                     box = cv2.boxPoints(((x, y), (h, w), angle))
                     box = np.int0(box)
                     cv2.drawContours(img, [box], 0, (0, 255, 0), 1)
+                    '''
     # Display the image with overlays
     cv2.imshow('Overlay', img)
     cv2.waitKey(0)
@@ -55,5 +58,5 @@ if __name__ == '__main__':
     img = cv2.resize(img, (512, 512))
     img_compatible = np.expand_dims(img, axis=0)
     score_map, rbox_map = predict_east(img_compatible)
-    # img = cv2.resize(img, (128, 128))
+    img = cv2.resize(img, (128, 128))
     plot_east_prediction(img, score_map, rbox_map)

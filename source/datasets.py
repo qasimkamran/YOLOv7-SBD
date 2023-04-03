@@ -1,3 +1,4 @@
+import argparse
 import os
 import cv2
 import numpy as np
@@ -6,6 +7,8 @@ from scipy.ndimage import distance_transform_edt
 import losses
 import models
 import warnings
+import math
+import icdar
 
 warnings.filterwarnings('ignore', message='A newer version of deeplake*')
 import deeplake
@@ -29,15 +32,15 @@ class ICDAR13:
         os.path.isfile('../np_data/icdar13_boxes.npy')
 
         try:
-            images_data = np.load('../np_data/icdar13_images.npy')
+            self.images_data = np.load('../np_data/icdar13_images.npy')
             print('Loaded ICDAR 2013 images data')
-            score_boxes = np.load('../np_data/icdar13_score_map_boxes.npy')
-            rbox_boxes = np.load('../np_data/icdar13_rbox_map_boxes.npy')
+            self.score_boxes = np.load('../np_data/icdar13_score_map_boxes.npy')
+            self.rbox_boxes = np.load('../np_data/icdar13_rbox_map_boxes.npy')
             print('Loaded ICDAR 2013 bounding box data')
         except FileNotFoundError:
             return None, None, None
 
-        return images_data, score_boxes, rbox_boxes
+        return self.images_data, self.score_boxes, self.rbox_boxes
 
     def save_dataset(self):
         # Load dataset from deeplake
@@ -56,6 +59,7 @@ class ICDAR13:
             score_map_compliants.append(score_map_compliant)
             rbox_map_compliants.append(rbox_map_compliant)
         score_map_compliants = self.homogenize_array(score_map_compliants)
+        rbox_map_compliants = self.homogenize_array(rbox_map_compliants)
         images = np.array(images)
 
         # Saving numpy arrays externally for faster access in subsequent runs
@@ -83,9 +87,9 @@ class ICDAR13:
 
     def display_data_batch(self):
         for i in range(0, 100):
-            img = self.images_data[i][0]
+            img = self.images_data[i]
             for j in range(0, 19):
-                x1, y1, x2, y2 = self.boxes_data[i][j]
+                x1, y1, x2, y2 = self.score_boxes[i][j]
                 cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
             cv2.imshow('sample_{i}', img)
             cv2.waitKey(0)
@@ -106,55 +110,95 @@ class ICDAR13:
         return img, score_map_compliant, rbox_map_compliant
 
     def process_rbox_map(self, boxes):
-        pred_width, pred_height = self.EAST_SIZE, self.EAST_SIZE
-        true_width, true_height = self.INPUT_SIZE, self.INPUT_SIZE
+        rboxes = np.zeros(boxes.shape)
 
-        rboxes = np.zeros((20, 5))
+        for i, box in enumerate(boxes):
+            xmin, ymin, xmax, ymax = box
 
-        for j, box in enumerate(boxes):
-            x1, y1, x2, y2 = box
-            scale_factor_x = pred_width / true_width
-            scale_factor_y = pred_height / true_height
-            x1, y1, x2, y2 = losses.rescale_coords(x1, y1, x2, y2, scale_factor_x, scale_factor_y)
-            rboxes[j] = losses.bbox_to_rbox([x1, y1, x2, y2])
+            center_top = (round((xmin + xmax) / 2), round(ymin))
+            center_bottom = (round((xmin + xmax) / 2), round(ymax))
 
-        overlayed_rboxes = np.ones((pred_width, pred_height))
+            slope = (center_bottom[0] - center_top[0]) / (center_bottom[1] - center_top[1])
+            y_intercept = center_top[1] - slope * center_top[0]
 
-        for j, rbox in enumerate(rboxes):
-            x, y, w, h, angle = rboxes[j]
-            rbox = cv2.boxPoints(((x, y), (w, h), angle))
-            rbox = np.int0(rbox)
-            cv2.drawContours(overlayed_rboxes, [rbox], 0, (0, 0, 0), 1)
+            if slope == 0:
+                slope = 1
 
-        ones_converted = np.zeros((pred_width, pred_height, 5))
+            x_left = (ymin - y_intercept) / slope
+            x_right = (ymax - y_intercept) / slope
+            y_top = slope * xmin + y_intercept
+            y_bottom = slope * xmax + y_intercept
 
-        # Get the indices of all 0s in the image
-        zero_indices = np.argwhere(overlayed_rboxes == 0)
+            d1 = math.sqrt((x_left - xmin) ** 2 + (ymin - y_top) ** 2)
+            d2 = math.sqrt((xmax - x_right) ** 2 + (ymin - y_top) ** 2)
+            d3 = math.sqrt((xmax - x_right) ** 2 + (ymax - y_bottom) ** 2)
+            d4 = math.sqrt((x_left - xmin) ** 2 + (ymax - y_bottom) ** 2)
 
-        # Compute the distance transform of the image
-        distance_transform = distance_transform_edt(overlayed_rboxes)
+            rboxes[i, 0] = d1
+            rboxes[i, 1] = d2
+            rboxes[i, 2] = d3
+            rboxes[i, 3] = d4
 
-        # Initialize the output arrays
-        distances = np.zeros((overlayed_rboxes.shape[0], overlayed_rboxes.shape[1], 4), dtype=np.float32)
-        angles = np.zeros_like(overlayed_rboxes, dtype=np.float32)
+        return rboxes
 
-        # Loop over all pixels in the image
-        for j in range(overlayed_rboxes.shape[0]):
-            for k in range(overlayed_rboxes.shape[1]):
-                if overlayed_rboxes[j, k] == 1:
-                    # Compute the distance to the closest 0 in each direction
-                    distances[j, k, 0] = distance_transform[j, :k][::-1].argmin() + 1 if k > 0 else 0
-                    distances[j, k, 1] = distance_transform[:j, k][::-1].argmin() + 1 if j > 0 else 0
-                    distances[j, k, 2] = distance_transform[j, k + 1:].argmin() + 1 if k < overlayed_rboxes.shape[
-                        1] - 1 else 0
-                    distances[j, k, 3] = distance_transform[j + 1:, k].argmin() + 1 if j < overlayed_rboxes.shape[
-                        0] - 1 else 0
+class ICDAR15:
+    images_data = None
+    score_maps_data = None
+    geo_maps_data = None
 
-                    # Compute the angle to the closest 0
-                    x, y = zero_indices[
-                        np.argmin(np.sqrt((j - zero_indices[:, 0]) ** 2 + (k - zero_indices[:, 1]) ** 2))]
-                    angles[j, k] = np.arctan2(y - k, x - j)
+    INPUT_SIZE = models.INPUT_SIZE
 
-        ones_converted = np.concatenate([distances, angles[..., None]], axis=-1)
+    EAST_SIZE = 128
 
-        return ones_converted
+    def save_dataset(self):
+        parser = argparse.ArgumentParser()
+        parser.add_argument('--validation_data_path', type=str, default='../train_data')
+        parser.add_argument('--input_size', type=int, default=self.INPUT_SIZE)
+        parser.add_argument('--geometry', type=str, default='RBOX')
+        parser.add_argument('--max_image_large_side', type=int, default=1280)
+        parser.add_argument('--max_text_size', type=int, default=800)
+        parser.add_argument('--min_text_size', type=int, default=10)
+        parser.add_argument('--min_crop_side_ratio', type=float, default=0.1)
+        FLAGS = parser.parse_args()
+        FLAGS.suppress_warnings_and_error_messages = False
+        FLAGS.min_crop_side_ratio = 0.1
+
+        # Saving numpy arrays externally for faster access in subsequent runs
+        if not os.path.exists(MAIN_DATASET_DIR):
+            os.mkdir(MAIN_DATASET_DIR)
+
+        images, score_maps, geo_maps = icdar.load_data(FLAGS)
+
+        np.save('../np_data/icdar15_images.npy', images)
+        print('Saving numpy array for ICDAR 2015 images of shape:', images.shape)
+
+        np.save('../np_data/icdar15_score_maps.npy', score_maps)
+        print('Saving numpy array for ICDAR 2015 score maps of shape:', score_maps.shape)
+
+        np.save('../np_data/icdar15_geo_maps.npy', geo_maps)
+        print('Saving numpy array for ICDAR 2015 geo maps of shape:', geo_maps.shape)
+
+    def load_dataset(self):
+        # Check if saved before loading
+        os.path.isdir('../np_data')
+        os.path.isfile('../np_data/icdar15_images.npy')
+        os.path.isfile('../np_data/icdar15_score_maps.npy')
+        os.path.isfile('../np_data/icdar15_geo_maps.npy')
+
+        images = np.load('../np_data/icdar15_images.npy')
+        score_maps = np.load('../np_data/icdar15_score_maps.npy')
+        geo_maps = np.load('../np_data/icdar15_geo_maps.npy')
+
+        try:
+            self.images_data = np.load('../np_data/icdar15_images.npy')
+            print('Loaded ICDAR 2015 images data')
+
+            self.score_maps_data = np.load('../np_data/icdar15_score_maps.npy')
+            print('Loaded ICDAR 2015 score maps data')
+
+            self.geo_maps_data = np.load('../np_data/icdar15_geo_maps.npy')
+            print('Loaded ICDAR 2015 geo maps data')
+        except FileNotFoundError:
+            return None, None, None
+
+        return self.images_data, self.score_maps_data, self.geo_maps_data
