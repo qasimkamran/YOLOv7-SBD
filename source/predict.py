@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-import models
+import nets
 import matplotlib.pyplot as plt
 
 
@@ -25,7 +25,7 @@ def display_feature_maps(model, layer_names, image):
 
 
 def predict_east(img):
-    EAST_model = models.EAST().model
+    EAST_model = nets.EAST().model
 
     EAST_model.load_weights('east_saved/saved_model.h5')
 

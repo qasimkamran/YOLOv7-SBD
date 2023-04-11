@@ -1018,7 +1018,7 @@ def load_data(FLAGS, is_train=False):
 
 
 if __name__ == '__main__':
-    check_annotations('../train_data')
+    # check_annotations('../train_data')
     corners2 = np.array([[3771, 1850], [3887, 1850], [3887, 2070], [3771, 2070]])
     reordered_corner2 = reorder_vertexes(corners2)
     parser = argparse.ArgumentParser()
@@ -1033,13 +1033,29 @@ if __name__ == '__main__':
         image_fname_noext = osp.splitext(image_fname)[0]
         label_fname = 'gt_' + image_fname_noext + '.txt'
         label_path = osp.join(images_dir, label_fname)
+        print(label_path)
         text_polys, text_tags = load_annotation(label_path)
         text_polys, text_tags = check_and_validate_polys(FLAGS, text_polys, text_tags, (h, w))
-        print(text_polys)
         crop_image, crop_text_polys, crop_text_tags = crop_area(FLAGS, image, text_polys, text_tags,
                                                                 crop_background=True)
-        cv2.drawContours(crop_image, crop_text_polys.astype(np.int32), -1, (0, 255, 0), 2)
-        show_image(crop_image, 'crop_image')
-        cv2.drawContours(image, text_polys.astype(np.int32), -1, (0, 255, 0), 2)
-        show_image(image, 'image')
-        cv2.waitKey(0)
+        # cv2.drawContours(crop_image, crop_text_polys.astype(np.int32), -1, (0, 255, 0), 2)
+        # show_image(crop_image, 'crop_image')
+        # cv2.drawContours(image, text_polys.astype(np.int32), -1, (0, 255, 0), 2)
+        # show_image(text_polys, 'image')
+        for i, contour in enumerate(text_polys):
+            # get bounding rectangle around contour
+            x, y, w, h = cv2.boundingRect(contour)
+            with open(label_path, 'r') as f:
+                lines = f.readlines()
+                for line in lines:
+                    fields = line.strip().split(',')
+                    label_x = fields[0]
+                    label_y = fields[3]
+                    label_string = fields[8]
+                    if str(x) == label_x and str(y) == label_y:
+                        if label_string.isalpha():
+                            print(label_string)
+            # crop image
+            cropped_img = image[y:y + h, x:x + w]
+            cv2.imshow('Crop', cropped_img)
+            cv2.waitKey(0)

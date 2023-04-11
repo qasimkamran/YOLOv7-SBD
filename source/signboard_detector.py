@@ -5,6 +5,7 @@ The one-stop-shop for all network functionality on this repository.
 
 import os
 from yolov7_package import Yolov7Detector
+os.environ['HSA_OVERRIDE_GFX_VERSION'] = '10.3.0'
 
 
 class SignboardDetector:
@@ -19,7 +20,7 @@ class SignboardDetector:
     RESULTS_DIR = os.path.abspath('results')
 
     def __init__(self):
-        self.network = Yolov7Detector()
+        self.network = Yolov7Detector(weights='../best.pt').model
         print('Successfully initialised network!')
         pass
 
@@ -43,3 +44,7 @@ class SignboardDetector:
     def make_prediction(self):
         # Testing yolov7
         print('Test')
+
+
+if __name__ == '__main__':
+    detector = SignboardDetector()
