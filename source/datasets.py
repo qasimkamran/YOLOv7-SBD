@@ -8,7 +8,7 @@ from matplotlib import pyplot as plt
 from scipy.ndimage import distance_transform_edt
 from tensorflow.keras.utils import to_categorical
 import losses
-import nets
+import tf_models
 import warnings
 import math
 import icdar
@@ -25,7 +25,7 @@ class ICDAR13:
     score_boxes = None
     rbox_boxes = None
 
-    INPUT_SIZE = nets.INPUT_SIZE
+    INPUT_SIZE = tf_models.INPUT_SIZE
 
     EAST_SIZE = 128
 
@@ -156,7 +156,7 @@ class ICDAR15:
     transcription_data = None
     one_hot_labels_data = None
 
-    EAST_INPUT_SIZE = nets.INPUT_SIZE
+    EAST_INPUT_SIZE = tf_models.INPUT_SIZE
     EAST_SIZE = 128
 
     OCR_INPUT_SIZE = (160, 80)

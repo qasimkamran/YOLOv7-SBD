@@ -980,6 +980,15 @@ def count_samples(FLAGS):
         return len([f for f in os.walk(FLAGS.training_data_path).next()[2] if f[-4:] == ".jpg"])
 
 
+def sort_poly(p):
+    min_axis = np.argmin(np.sum(p, axis=1))
+    p = p[[min_axis, (min_axis+1) % 4, (min_axis+2) % 4, (min_axis+3) % 4]]
+    if abs(p[0, 0] - p[1, 0]) > abs(p[0, 1] - p[1, 1]):
+        return p
+    else:
+        return p[[0, 3, 2, 1]]
+
+
 def load_data_process(FLAGS, image_file, is_train):
     try:
         img = cv2.imread(image_file)
@@ -1004,12 +1013,13 @@ def load_data_process(FLAGS, image_file, is_train):
 def load_data(FLAGS, is_train=False):
     image_files = np.array(get_images(FLAGS.validation_data_path))
 
+    image_files = np.sort(image_files)
+
     loaded_data = []
-    for image_file in image_files:
+    for i, image_file in enumerate(image_files):
         data = load_data_process(FLAGS, image_file, is_train)
         loaded_data.append(data)
     images = [item[0] for item in loaded_data if not item is None]
-    image_fns = [item[1] for item in loaded_data if not item is None]
     score_maps = [item[2] for item in loaded_data if not item is None]
     geo_maps = [item[3] for item in loaded_data if not item is None]
     print('Number of validation images : %d' % len(images))

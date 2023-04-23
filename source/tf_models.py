@@ -196,7 +196,7 @@ class OCR:
         x = layers.Reshape((-1, 128))(x)
         outputs = rnn(x)
         ocr = models.Model(inputs=inputs, outputs=outputs)
-        ocr.summary()
+        # ocr.summary()
         return ocr
 
 
@@ -231,19 +231,10 @@ class SimpleOCR:
 
         self.model = models.Model(inputs=input_img, outputs=output)
 
-        self.model.summary()
+        # self.model.summary()
 
 
-'''
-from yolov7_package import Yolov7Detector
-
-
-class YOLOv7:
-    def __int__(self):
-        self.model = Yolov7Detector(weights='../best.pt').model
-'''
 if __name__ == '__main__':
     east = EAST().model
     ocr = OCR().model
     simple_ocr = SimpleOCR().model
-    # yolov7 = YOLOv7()

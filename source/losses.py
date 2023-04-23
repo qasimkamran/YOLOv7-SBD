@@ -4,7 +4,7 @@ import math
 import cv2
 from fontTools.misc.arrayTools import pointInRect
 
-import nets
+import tf_models
 from scipy.ndimage import distance_transform_edt
 from skimage import measure
 
