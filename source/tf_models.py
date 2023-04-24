@@ -4,6 +4,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import keras
 from keras import layers, models, Input
 from keras.applications.resnet import ResNet50
+from keras.regularizers import l1, l2
 import keras.backend as K
 import tensorflow as tf
 import numpy as np
@@ -155,51 +156,6 @@ class SimpleHTR:
         self.net = model
 
 
-class OCR:
-    OCR_INPUT_SIZE = (200, 100)
-
-    def __init__(self):
-        cnn = self.cnn_model()
-        rnn = self.rnn_model(52)  # Lower and upper case letters (26 + 26)
-        ocr = self.ocr_model(cnn, rnn)
-        self.model = ocr
-
-    # Define the CNN architecture
-    def cnn_model(self):
-        inputs = Input(shape=(self.OCR_INPUT_SIZE[1], self.OCR_INPUT_SIZE[0], 3))
-        x = layers.Conv2D(32, (3, 3), activation='relu')(inputs)
-        x = layers.MaxPooling2D(pool_size=(2, 2))(x)
-        x = layers.Conv2D(64, (3, 3), activation='relu')(x)
-        x = layers.MaxPooling2D(pool_size=(2, 2))(x)
-        x = layers.Flatten()(x)
-        outputs = layers.Dense(128, activation='relu')(x)
-        cnn = models.Model(inputs=inputs, outputs=outputs)
-        return cnn
-
-    # Define the RNN architecture
-    def rnn_model(self, num_classes):
-        inputs = Input(shape=(None, 128))
-        x = layers.LSTM(256, return_sequences=True)(inputs)
-        x = layers.Dropout(0.2)(x)
-        x = layers.LSTM(256)(x)
-        x = layers.Dropout(0.2)(x)
-        x = layers.Dense(128, activation='relu')(x)
-        outputs = layers.Dense(num_classes, activation='softmax')(x)
-        rnn = models.Model(inputs=inputs, outputs=outputs)
-        return rnn
-
-    # Combine the CNN and RNN models
-    def ocr_model(self, cnn, rnn):
-        inputs = Input(shape=(None, self.OCR_INPUT_SIZE[1], self.OCR_INPUT_SIZE[0], 3))
-        x = layers.TimeDistributed(cnn)(inputs)
-        # x = layers.TimeDistributed(layers.Reshape((-1, 128)))(x)
-        x = layers.Reshape((-1, 128))(x)
-        outputs = rnn(x)
-        ocr = models.Model(inputs=inputs, outputs=outputs)
-        # ocr.summary()
-        return ocr
-
-
 class SimpleOCR:
     OCR_INPUT_SIZE = (80, 160, 1)
     RECOGNITION_CLASSES = 53
@@ -221,8 +177,8 @@ class SimpleOCR:
         x = layers.Masking(mask_value=0.0, name='masking_1')(x)
 
         # RNN for sequence recognition
-        x = layers.Bidirectional(layers.LSTM(128, return_sequences=True, recurrent_activation='sigmoid', unroll=True, name='lstm_1'), name='bidirectional_1')(x)
-        x = layers.Bidirectional(layers.LSTM(64, return_sequences=True, recurrent_activation='sigmoid', unroll=True, name='lstm_2'), name='bidirectional_2')(x)
+        x = layers.Bidirectional(layers.LSTM(128, return_sequences=True, kernel_regularizer=l2(0.001), recurrent_activation='sigmoid', unroll=True, name='lstm_1'), name='bidirectional_1')(x)
+        x = layers.Bidirectional(layers.LSTM(64, return_sequences=True, kernel_regularizer=l2(0.001), recurrent_activation='sigmoid', unroll=True, name='lstm_2'), name='bidirectional_2')(x)
 
         # Dense layer and output
         x = layers.Dense(64, activation='relu', name='dense_1')(x)
@@ -236,5 +192,4 @@ class SimpleOCR:
 
 if __name__ == '__main__':
     east = EAST().model
-    ocr = OCR().model
     simple_ocr = SimpleOCR().model

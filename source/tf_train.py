@@ -66,16 +66,20 @@ def train_ocr():
     val_y = one_hot_labels_data[1335:1906]
 
     # Compile the model
-    OCR_model.compile(optimizer=tf.keras.optimizers.Adam(0.00001),
+    OCR_model.compile(optimizer=tf.keras.optimizers.RMSprop(0.0001),
                       loss=tf.keras.losses.CategoricalCrossentropy())
 
     # Train the model
     OCR_model.fit(train_x, train_y,
                   validation_data=(val_x, val_y),
-                  batch_size=3,
+                  batch_size=8,
                   epochs=10)
+
+    OCR_model.save('ocr_saved')
+
+    OCR_model.save_weights('ocr_saved/saved_model.h5')
 
 
 if __name__ == '__main__':
-    train_east()
-    # train_ocr()
+    # train_east()
+    train_ocr()

@@ -136,3 +136,4 @@ train_data
 source/wandb
 source/yolo_saved
 source/east_saved
+source/ocr_saved
