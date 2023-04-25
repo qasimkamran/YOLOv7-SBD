@@ -42,12 +42,12 @@ def train_east():
                    validation_data=(val_x, [val_y1, val_y2]),
                    validation_batch_size=3,
                    batch_size=3,
-                   epochs=10,
+                   epochs=20,
                    callbacks=[tensorboard_callback])
 
-    # EAST_model.save('east_saved')
+    EAST_model.save('new_east_saved')
 
-    # EAST_model.save_weights('east_saved/saved_model.h5')
+    EAST_model.save_weights('new_east_saved/saved_model.h5')
 
 
 def train_ocr():
@@ -81,5 +81,5 @@ def train_ocr():
 
 
 if __name__ == '__main__':
-    # train_east()
-    train_ocr()
+    train_east()
+    # train_ocr()

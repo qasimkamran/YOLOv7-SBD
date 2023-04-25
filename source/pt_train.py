@@ -6,34 +6,17 @@ import argparse
 import numpy as np
 import yolov7.train
 import logging
-import math
 import os
 import random
 import time
-from copy import deepcopy
 from pathlib import Path
-from threading import Thread
 import torch.distributed as dist
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-import torch.optim.lr_scheduler as lr_scheduler
 import torch.utils.data
 import yaml
-from torch.cuda import amp
-from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
-from tqdm import tqdm
-import test  # import test.py to get mAP after each epoch
-from models.experimental import attempt_load
-from models.yolo import Model
-from utils.autoanchor import check_anchors
-from utils.datasets import create_dataloader
 from utils.general import labels_to_class_weights, increment_path, labels_to_image_weights, init_seeds, \
     fitness, strip_optimizer, get_latest_run, check_dataset, check_file, check_git_status, check_img_size, \
     check_requirements, print_mutation, set_logging, one_cycle, colorstr
-from utils.google_utils import attempt_download
-from utils.loss import ComputeLoss, ComputeLossOTA
 from utils.plots import plot_images, plot_labels, plot_results, plot_evolution
 from utils.torch_utils import ModelEMA, select_device, intersect_dicts, torch_distributed_zero_first, is_parallel
 from utils.wandb_logging.wandb_utils import WandbLogger, check_wandb_resume
@@ -46,12 +29,12 @@ logger = logging.getLogger(__name__)
 
 def train_yolov7():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--weights', type=str, default='yolo7.pt', help='initial weights path')
+    parser.add_argument('--weights', type=str, default='yolov7_training.pt', help='initial weights path')
     parser.add_argument('--cfg', type=str, default='../cfg/training/yolov7.yaml', help='model.yaml path')
     parser.add_argument('--data', type=str, default='../data/signboard.yaml', help='data.yaml path')
-    parser.add_argument('--hyp', type=str, default='../hyp/hyp.scratch.custom.yaml', help='hyperparameters path')
-    parser.add_argument('--epochs', type=int, default=30)
-    parser.add_argument('--batch-size', type=int, default=16, help='total batch size for all GPUs')
+    parser.add_argument('--hyp', type=str, default='../yolov7/data/hyp.scratch.custom.yaml', help='hyperparameters path')
+    parser.add_argument('--epochs', type=int, default=10)
+    parser.add_argument('--batch-size', type=int, default=5, help='total batch size for all GPUs')
     parser.add_argument('--img-size', nargs='+', type=int, default=[1024, 736], help='[train, test] image sizes')
     parser.add_argument('--rect', action='store_true', help='rectangular training')
     parser.add_argument('--resume', nargs='?', const=True, default=False, help='resume most recent training')
@@ -224,23 +207,6 @@ def train_yolov7():
         plot_evolution(yaml_file)
         print(f'Hyperparameter evolution complete. Best results saved as: {yaml_file}\n'
               f'Command to train a new model with these hyper parameters: $ python train.py --hyp {yaml_file}')
-
-
-class SignboardDetector:
-    network = None
-
-    def __init__(self):
-        self.network = Yolov7Detector(img_size=[1024, 736])
-        print('Successfully initialised network!')
-        pass
-
-    def train_model(self):
-        self.network.train(save_dir='yolo_saved/train',
-                           cfg='../cfg/training/yolov7.yaml',
-                           hyp='../hyp/hyp.scratch.custom.yaml',
-                           data='../data/signboard.yaml',
-                           batch_size=5,
-                           epochs=10)
 
 
 if __name__ == '__main__':

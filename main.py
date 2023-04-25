@@ -1,4 +1,4 @@
-from pt_models import SignboardDetector
+from pt_train import SignboardDetector
 from signboard_recreation import SignboardCreator
 from text_detector import EAST
 

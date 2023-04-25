@@ -35,9 +35,11 @@ def display_feature_maps(model, layer_names, image):
 def predict_east(img):
     EAST_model = tf_models.EAST().model
 
-    EAST_model.load_weights('east_saved/saved_model.h5')
+    EAST_model.load_weights('new_east_saved/saved_model.h5')
 
     score_map, geo_map = EAST_model.predict(img)
+
+    return img, score_map, geo_map
 
     score_map_thresh = 0.8
     nms_thresh = 0.2
@@ -123,8 +125,8 @@ def resize_image(im, max_side_len=1280):
 
 def test_predict(img, score_map, geo_map):
     score_map_thresh = 0.8
-    nms_thresh = 0.2
-    box_thresh = 0.0
+    nms_thresh = 0.8
+    box_thresh = 0.1
 
     if len(score_map.shape) == 4:
         score_map = score_map[0, :, :, 0]
@@ -134,6 +136,7 @@ def test_predict(img, score_map, geo_map):
     xy_text = np.argwhere(score_map > score_map_thresh)
     xy_text = xy_text[np.argsort(xy_text[:, 0])]
 
+    print(geo_map[xy_text[:, 0], xy_text[:, 1], :].shape)
     # restore
     text_box_restored = icdar.restore_rectangle(xy_text[:, ::-2] * 4, geo_map[xy_text[:, 0], xy_text[:, 1], :])  # N*4*2
     print('{} text boxes before nms'.format(text_box_restored.shape[0]))
@@ -151,8 +154,8 @@ def test_predict(img, score_map, geo_map):
 
     if boxes is not None:
         boxes = boxes[:, :8].reshape((-1, 4, 2))
-        boxes[:, :, 0] /= 0.3
-        boxes[:, :, 0] += 210
+        boxes[:, :, 0] += 128
+        boxes[:, :, 0] += 128
 
     if boxes is not None:
         for box in boxes:
@@ -160,16 +163,67 @@ def test_predict(img, score_map, geo_map):
             box = icdar.sort_poly(box.astype(np.int32))
             print(box.astype(np.int32).reshape((-1, 1, 2)))
             cv2.polylines(img, [box.astype(np.int32).reshape((-1, 1, 2))], True, color=(0, 255, 255), thickness=1)
+    print(img.shape)
     cv2.imshow('Prediction', img)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
 
+def predict_ocr(img):
+    OCR_model = tf_models.SimpleOCR().model
+    ICDAR_data = datasets.ICDAR15()
+    images, transcripts, labels = ICDAR_data.load_recognition_dataset()
+
+    OCR_model.load_weights('ocr_saved/saved_model.h5')
+
+    one_hot_label = OCR_model.predict(img)
+
+    for i in enumerate(one_hot_label[0]):
+        for j in enumerate(one_hot_label[0, i[0]]):
+            print(one_hot_label[0, i[0], j[0]])
+            one_hot_label[0, i[0], j[0]] = int(one_hot_label[0, i[0], j[0]])
+
+    transcript = ICDAR_data.decode_recognition_label(one_hot_label[0])
+
+    print(transcript)
+
+
+def show_score(img, score_map):
+    # Overlay predicted boxes on the original image
+    for j in range(score_map.shape[0]):
+        for k in range(score_map.shape[1]):
+            if np.any(score_map[j, k] > 0.5):  # Only draw boxes with score > 0.5
+                cv2.circle(img, (k, j), 1, (0, 255, 255), -1)
+    # Display the image with overlays
+    cv2.imshow('Overlay', img)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+
 if __name__ == '__main__':
-    img = cv2.imread('../misc_images/pump')
-    img = cv2.imread('../train_data/img_100_2013.jpg')
-    img = cv2.resize(img, (512, 512))
-    img_compatible = np.expand_dims(img, axis=0)
-    boxes = predict_east(img_compatible)
-    # img = cv2.resize(img, (128, 128))
-    plot_east_prediction(img, boxes)
+    demo = 1
+
+    if demo == 2:
+        img = cv2.imread('../ocr_prediction.png', cv2.IMREAD_GRAYSCALE)
+        img = cv2.resize(img, (160, 80))
+        img = img.astype('float32') / 255.0
+        img = np.expand_dims(img, axis=-1)
+        img = np.expand_dims(img, axis=0)
+        predict_ocr(img)
+
+    if demo == 1:
+        img = cv2.imread('../train_data/img_100_2013.jpg')
+        img = cv2.resize(img, (512, 512))
+        img_compatible = np.expand_dims(img, axis=0)
+        img, score_map, geo_map = predict_east(img_compatible)
+        images, score_maps, geo_maps = datasets.ICDAR15().load_detection_dataset()
+        for i in enumerate(geo_map[0]):
+            for j in enumerate(geo_map[0, i[0]]):
+                for k in enumerate(geo_map[0, i[0], j[0]]):
+                    geo_map[i[0], j[0], k[0]] = np.round(geo_map[i[0], j[0], k[0]])
+                    print(geo_map[i[0], j[0], k[0]])
+        raise Exception
+        # img = cv2.resize(img[0], (128, 128))
+        # show_score(img, score_map[0])
+        test_predict(img[0], score_map[0], geo_map[0])
+        # plot_east_prediction(img, boxes)

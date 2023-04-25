@@ -167,6 +167,6 @@ def rbox_loss(y_true, y_pred):
     AABB_loss = -tf.math.log((intersection_area + 1.0) / (union_area + 1.0))
     theta_loss = 1 - tf.cos(theta_pred - theta_true)
     loss = AABB_loss + 20 * theta_loss
-    loss = tf.reduce_mean(loss)
+    loss = tf.reduce_mean(loss, axis=[0, 1, 2])
 
     return loss
