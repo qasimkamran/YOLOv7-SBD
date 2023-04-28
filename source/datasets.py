@@ -47,11 +47,11 @@ class ICDAR13:
         return self.images_data, self.score_boxes, self.rbox_boxes
 
     def save_dataset(self):
-        # Load dataset from deeplake
+        # Load icdar13 from deeplake
         dataset = deeplake.load("hub://activeloop/icdar-2013-text-localize-train")
         tf_dataset = dataset.tensorflow()
 
-        # Iterate over the dataset preprocessing its contents and forming numpy arrays
+        # Iterate over the icdar13 preprocessing its contents and forming numpy arrays
         iterator = iter(tf_dataset)
         images = []
         score_map_compliants = []
@@ -154,6 +154,7 @@ class ICDAR15:
 
     cropped_images_data = None
     transcription_data = None
+    index_transcriptions = None
     one_hot_labels_data = None
 
     EAST_INPUT_SIZE = tf_models.INPUT_SIZE
@@ -164,7 +165,7 @@ class ICDAR15:
 
     char_to_index = None
 
-    TRAIN_DIR = '../train_data'
+    TRAIN_DIR = '../raw_data/icdar_composite'
 
     def save_detection_dataset(self):
         parser = argparse.ArgumentParser()
@@ -264,7 +265,7 @@ class ICDAR15:
         self.char_to_index = {c: i+1 for i, c in enumerate(char_set)}
 
         # Convert transcriptions to lists of indices
-        index_transcriptions = [[self.char_to_index[c] for c in transcription] for transcription in self.transcription_data]
+        self.index_transcriptions = [[self.char_to_index[c] for c in transcription] for transcription in self.transcription_data]
 
         # Function to convert a list of indices to a one-hot encoded array
         def one_hot_encode(indices, num_classes):
@@ -275,27 +276,19 @@ class ICDAR15:
 
         # Convert the lists of indices to one-hot encoded arrays
         self.one_hot_labels_data = [one_hot_encode(index_transcription, self.RECOGNITION_CLASSES) for index_transcription in
-                                    index_transcriptions]
+                                    self.index_transcriptions]
 
         self.cropped_images_data = np.array(self.cropped_images_data, dtype=np.float64)
         self.one_hot_labels_data = np.asarray(self.one_hot_labels_data)
         self.transcription_data = np.asarray(self.transcription_data)
 
-        self.one_hot_labels_data = pad_sequences(self.one_hot_labels_data, maxlen=200, padding='post')
-        '''
-        dataset = tf.data.Dataset.from_generator(
-            self.recognition_dataset_generator,
-            args=[self.cropped_images_data, one_hot_labels],
-            output_signature=(
-                tf.TensorSpec(shape=(None, self.cropped_images_data.shape[1], self.cropped_images_data.shape[2]), dtype=tf.float64),
-                tf.TensorSpec(shape=(None, self.RECOGNITION_CLASSES), dtype=tf.int32),
-            )
-        )
+        self.index_transcriptions = pad_sequences(self.index_transcriptions, padding='post', value=0)
 
-        raise Exception
-        '''
         assert len(self.cropped_images_data) == len(self.transcription_data) == len(
             self.one_hot_labels_data), f'Lengths mismatch in lists'
+
+        np.save('../np_data/icdar15_recognition_index_transcriptions.npy', self.index_transcriptions)
+        print('Saving numpy array for ICDAR 2015 recognition indexed transcriptions of shape:', self.index_transcriptions.shape)
 
         np.save('../np_data/icdar15_recognition_images.npy', self.cropped_images_data)
         print('Saving numpy array for ICDAR 2015 recognition images of shape:', self.cropped_images_data.shape)
@@ -319,6 +312,7 @@ class ICDAR15:
         os.path.isfile('../np_data/icdar15_recognition_images.npy')
         os.path.isfile('../np_data/icdar15_recognition_transcripts.npy')
         os.path.isfile('../np_data/icdar15_recognition_one_hot_labels.npy')
+        os.path.isfile('../np_data/icdar15_recognition_index_transcriptions.npy')
 
         try:
             self.cropped_images_data = np.load('../np_data/icdar15_recognition_images.npy')
@@ -333,10 +327,13 @@ class ICDAR15:
             self.one_hot_labels_data = np.load('../np_data/icdar15_recognition_one_hot_labels.npy')
             print('Loaded ICDAR 2015 recognition one hot labels data')
 
+            self.index_transcriptions = np.load('../np_data/icdar15_recognition_index_transcriptions.npy')
+            print('Loaded ICDAR 2015 recognition index transcriptions data')
+
         except FileNotFoundError:
             return None, None, None
 
-        return self.cropped_images_data, self.transcription_data, self.one_hot_labels_data
+        return self.cropped_images_data, self.transcription_data, self.index_transcriptions
 
     def visualise_data_batch(self):
         # create a 5x4 grid of subplots

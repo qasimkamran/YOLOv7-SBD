@@ -1,15 +1,11 @@
-import argparse
-import os
-
 import cv2
 import lanms
-import numpy as np
-
-import datasets
-import tf_models
 import matplotlib.pyplot as plt
-import time
+import numpy as np
+from imutils.object_detection import non_max_suppression
+import datasets
 import icdar
+import tf_models
 
 
 def plot_feature_maps(model, layer_name, image):
@@ -200,30 +196,90 @@ def show_score(img, score_map):
     cv2.destroyAllWindows()
 
 
+def predict_east_cv2(img):
+    net = cv2.dnn.readNet('new_east_saved/frozen_east_text_detection.pb')
+
+    orig = img
+    (H, W) = img.shape[:2]
+
+    (newW, newH) = (640, 320)
+    rW = W / float(newW)
+    rH = H / float(newH)
+
+    image = cv2.resize(img, (newW, newH))
+    (H, W) = image.shape[:2]
+
+    layerNames = [
+        "feature_fusion/Conv_7/Sigmoid",
+        "feature_fusion/concat_3"]
+
+    blob = cv2.dnn.blobFromImage(img, 1.0, (W, H),
+                                 (123.68, 116.78, 103.94), swapRB=True, crop=False)
+
+    net.setInput(blob)
+    (scores, geometry) = net.forward(layerNames)
+
+    (numRows, numCols) = scores.shape[2:4]
+    rects = []
+    confidences = []
+
+    for y in range(0, numRows):
+
+        scoresData = scores[0, 0, y]
+        xData0 = geometry[0, 0, y]
+        xData1 = geometry[0, 1, y]
+        xData2 = geometry[0, 2, y]
+        xData3 = geometry[0, 3, y]
+        anglesData = geometry[0, 4, y]
+
+        # loop over the number of columns
+        for x in range(0, numCols):
+            # if our score does not have sufficient probability, ignore it
+            if scoresData[x] < 0.5:
+                continue
+
+            # compute the offset factor as our resulting feature maps will
+            # be 4x smaller than the input image
+            (offsetX, offsetY) = (x * 4.0, y * 4.0)
+
+            # extract the rotation angle for the prediction and then
+            # compute the sin and cosine
+            angle = anglesData[x]
+            cos = np.cos(angle)
+            sin = np.sin(angle)
+
+            # use the geometry volume to derive the width and height of
+            # the bounding box
+            h = xData0[x] + xData2[x]
+            w = xData1[x] + xData3[x]
+
+            # compute both the starting and ending (x, y)-coordinates for
+            # the text prediction bounding box
+            endX = int(offsetX + (cos * xData1[x]) + (sin * xData2[x]))
+            endY = int(offsetY - (sin * xData1[x]) + (cos * xData2[x]))
+            startX = int(endX - w)
+            startY = int(endY - h)
+
+            # add the bounding box coordinates and probability score to
+            # our respective lists
+            rects.append((startX, startY, endX, endY))
+            confidences.append(scoresData[x])
+
+    boxes = non_max_suppression(np.array(rects), probs=confidences)
+
+    for (startX, startY, endX, endY) in boxes:
+        startX = int(startX * rW)
+        startY = int(startY * rH)
+        endX = int(endX * rW)
+        endY = int(endY * rH)
+
+        # draw the bounding box on the image
+        cv2.rectangle(orig, (startX, startY), (endX, endY), (0, 255, 0), 3)
+    cv2.imshow("Text Detection", orig)
+    k = cv2.waitKey(0) & 0xff
+    cv2.destroyAllWindows()
+
+
 if __name__ == '__main__':
-    demo = 1
-
-    if demo == 2:
-        img = cv2.imread('../ocr_prediction.png', cv2.IMREAD_GRAYSCALE)
-        img = cv2.resize(img, (160, 80))
-        img = img.astype('float32') / 255.0
-        img = np.expand_dims(img, axis=-1)
-        img = np.expand_dims(img, axis=0)
-        predict_ocr(img)
-
-    if demo == 1:
-        img = cv2.imread('../train_data/img_100_2013.jpg')
-        img = cv2.resize(img, (512, 512))
-        img_compatible = np.expand_dims(img, axis=0)
-        img, score_map, geo_map = predict_east(img_compatible)
-        images, score_maps, geo_maps = datasets.ICDAR15().load_detection_dataset()
-        for i in enumerate(geo_map[0]):
-            for j in enumerate(geo_map[0, i[0]]):
-                for k in enumerate(geo_map[0, i[0], j[0]]):
-                    geo_map[i[0], j[0], k[0]] = np.round(geo_map[i[0], j[0], k[0]])
-                    print(geo_map[i[0], j[0], k[0]])
-        raise Exception
-        # img = cv2.resize(img[0], (128, 128))
-        # show_score(img, score_map[0])
-        test_predict(img[0], score_map[0], geo_map[0])
-        # plot_east_prediction(img, boxes)
+    img = cv2.imread('icdar_composite/img_101_2013.jpg')
+    predict_east_cv2(img)

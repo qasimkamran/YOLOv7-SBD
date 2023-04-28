@@ -1028,14 +1028,14 @@ def load_data(FLAGS, is_train=False):
 
 
 if __name__ == '__main__':
-    # check_annotations('../train_data')
+    # check_annotations('../raw_data/icdar_composite')
     corners2 = np.array([[3771, 1850], [3887, 1850], [3887, 2070], [3771, 2070]])
     reordered_corner2 = reorder_vertexes(corners2)
     parser = argparse.ArgumentParser()
     FLAGS = parser.parse_args()
     FLAGS.suppress_warnings_and_error_messages = False
     FLAGS.min_crop_side_ratio = 0.1
-    images_dir = '../train_data'
+    images_dir = '../raw_data/icdar_composite'
     for image_path in glob.glob(osp.join(images_dir, '*.jpg')):
         image = cv2.imread(image_path)
         h, w = image.shape[:2]

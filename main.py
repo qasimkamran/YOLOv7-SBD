@@ -1,6 +1,4 @@
-from pt_train import SignboardDetector
 from signboard_recreation import SignboardCreator
-from text_detector import EAST
 
 if __name__ == '__main__':
     # detector = SignboardDetector()

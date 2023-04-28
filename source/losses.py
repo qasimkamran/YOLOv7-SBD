@@ -1,12 +1,7 @@
 import tensorflow as tf
 import numpy as np
 import math
-import cv2
-from fontTools.misc.arrayTools import pointInRect
-
 import tf_models
-from scipy.ndimage import distance_transform_edt
-from skimage import measure
 
 
 def rescale_coords(x1, y1, x2, y2, scale_factor_x, scale_factor_y):
@@ -170,3 +165,17 @@ def rbox_loss(y_true, y_pred):
     loss = tf.reduce_mean(loss, axis=[0, 1, 2])
 
     return loss
+
+
+def ctc_loss_wrapper(label_lengths, logit_lengths):
+    def ctc_loss(y_true, y_pred):
+        return tf.nn.ctc_loss(
+            labels=y_true,
+            logits=tf.transpose(y_pred, (1, 0, 2)),
+            label_length=label_lengths,
+            logit_length=logit_lengths,
+            logits_time_major=False,
+            blank_index=tf_models.SimpleOCR.RECOGNITION_CLASSES + 1,  # Assuming the blank label is the last class
+        )
+
+    return ctc_loss

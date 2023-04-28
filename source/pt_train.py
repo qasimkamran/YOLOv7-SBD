@@ -1,25 +1,19 @@
-'''
-This file wraps YOLOv7 scripts in abstracted functions.
-The one-stop-shop for all network functionality on this repository.
-'''
 import argparse
-import numpy as np
-import yolov7.train
 import logging
 import os
 import random
 import time
 from pathlib import Path
+import numpy as np
 import torch.distributed as dist
 import torch.utils.data
 import yaml
 from torch.utils.tensorboard import SummaryWriter
-from utils.general import labels_to_class_weights, increment_path, labels_to_image_weights, init_seeds, \
-    fitness, strip_optimizer, get_latest_run, check_dataset, check_file, check_git_status, check_img_size, \
-    check_requirements, print_mutation, set_logging, one_cycle, colorstr
-from utils.plots import plot_images, plot_labels, plot_results, plot_evolution
-from utils.torch_utils import ModelEMA, select_device, intersect_dicts, torch_distributed_zero_first, is_parallel
-from utils.wandb_logging.wandb_utils import WandbLogger, check_wandb_resume
+import yolov7.train
+from utils.general import increment_path, fitness, get_latest_run, check_file, print_mutation, set_logging, colorstr
+from utils.plots import plot_evolution
+from utils.torch_utils import select_device
+from utils.wandb_logging.wandb_utils import check_wandb_resume
 
 os.environ['WANDB_API_KEY'] = '7373bda41faba1ef21e2061c8871257928190994'
 os.environ['HSA_OVERRIDE_GFX_VERSION'] = '10.3.0'
@@ -29,9 +23,9 @@ logger = logging.getLogger(__name__)
 
 def train_yolov7():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--weights', type=str, default='yolov7_training.pt', help='initial weights path')
-    parser.add_argument('--cfg', type=str, default='../cfg/training/yolov7.yaml', help='model.yaml path')
-    parser.add_argument('--data', type=str, default='../data/signboard.yaml', help='data.yaml path')
+    parser.add_argument('--weights', type=str, default='../weights/yolov7_training.pt', help='initial weights path')
+    parser.add_argument('--cfg', type=str, default='../yolov7/cfg/training/yolov7.yaml', help='model.yaml path')
+    parser.add_argument('--data', type=str, default='../yolov7/data/signboard.yaml', help='data.yaml path')
     parser.add_argument('--hyp', type=str, default='../yolov7/data/hyp.scratch.custom.yaml', help='hyperparameters path')
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--batch-size', type=int, default=5, help='total batch size for all GPUs')
@@ -59,10 +53,10 @@ def train_yolov7():
     parser.add_argument('--quad', action='store_true', help='quad dataloader')
     parser.add_argument('--linear-lr', action='store_true', help='linear LR')
     parser.add_argument('--label-smoothing', type=float, default=0.0, help='Label smoothing epsilon')
-    parser.add_argument('--upload_dataset', action='store_true', help='Upload dataset as W&B artifact table')
+    parser.add_argument('--upload_dataset', action='store_true', help='Upload bsvso as W&B artifact table')
     parser.add_argument('--bbox_interval', type=int, default=-1, help='Set bounding-box image logging interval for W&B')
     parser.add_argument('--save_period', type=int, default=-1, help='Log model after every "save_period" epoch')
-    parser.add_argument('--artifact_alias', type=str, default="latest", help='version of dataset artifact to be used')
+    parser.add_argument('--artifact_alias', type=str, default="latest", help='version of bsvso artifact to be used')
     parser.add_argument('--freeze', nargs='+', type=int, default=[0],
                         help='Freeze layers: backbone of yolov7=50, first3=0 1 2')
     parser.add_argument('--v5-metric', action='store_true', help='assume maximum recall as 1.0 in AP calculation')

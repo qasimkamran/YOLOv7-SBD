@@ -1,15 +1,10 @@
+import glob
 import os
 import shutil
-import glob
-import urllib
-
-import requests
-import torch
-import json
-from lxml import etree
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from lxml import etree
 
 
 def setup_dataset(name):
@@ -51,7 +46,7 @@ def setup_dataset(name):
                 dataset_obj = file
 
         if not dataset_obj:
-            print(f"No dataset with name '{name}' found.")
+            print(f"No bsvso with name '{name}' found.")
             return
 
         if not os.path.exists(name):
@@ -102,9 +97,9 @@ def download_dataset(drive_service, folder_id, target_dir, next_page_token=None)
         print('The download process was interrupted.')
 
 
-train_dir = '.\\dataset\\train'
-test_dir = '.\\dataset\\test'
-val_dir = '.\\dataset\\val'
+train_dir = '.\\raw_datasets\\train'
+test_dir = '.\\raw_dataset\\test'
+val_dir = '.\\raw_dataset\\val'
 
 
 def check_folders():
@@ -205,21 +200,18 @@ def prepare_data():
         split_train_and_val('.\\Train-Val', 'images')
         split_train_and_val('.\\Labelled Train-Val', 'labels')
 
-        convert_to_yolo_label('.\\dataset\\train\\labels')
-        purge_xml_labels('.\\dataset\\train\\labels')
+        convert_to_yolo_label('.\\bsvso\\train\\labels')
+        purge_xml_labels('.\\bsvso\\train\\labels')
 
-        convert_to_yolo_label('.\\dataset\\val\\labels')
-        purge_xml_labels('.\\dataset\\val\\labels')
+        convert_to_yolo_label('.\\bsvso\\val\\labels')
+        purge_xml_labels('.\\bsvso\\val\\labels')
 
-        convert_to_yolo_label('.\\dataset\\test\\labels')
-        purge_xml_labels('.\\dataset\\test\\labels')
+        convert_to_yolo_label('.\\bsvso\\test\\labels')
+        purge_xml_labels('.\\bsvso\\test\\labels')
     except AssertionError:
         print('No files found')
 
 
-def main():
-    setup_dataset('BSVSO')
-
-
 if __name__ == '__main__':
-    main()
+    setup_dataset('BSVSO')
+    # setup_dataset('SHoS Dataset')

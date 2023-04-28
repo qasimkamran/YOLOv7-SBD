@@ -1,5 +1,4 @@
 import os
-
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import keras
 from keras import layers, models, Input
@@ -113,49 +112,6 @@ class EAST:
         self.model = model
 
 
-class SimpleHTR:
-    def __int__(self):
-        input_tensor = Input(shape=(INPUT_SIZE, INPUT_SIZE, 1), name='input_t')
-
-        cnn_in4d = keras.layers.Reshape((INPUT_SIZE, INPUT_SIZE, 1))(input_tensor)
-
-        # CNN
-
-        kernel1 = layers.Conv2D(filters=32, kernel_size=(5, 5), padding='SAME', activation=None,
-                                kernel_initializer=tf.random.truncated_normal(stddev=0.1))(cnn_in4d)
-        conv1_norm = layers.BatchNormalization()(kernel1)
-        relu1 = layers.Activation('relu')(conv1_norm)
-        pool1 = layers.MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='VALID')(relu1)
-
-        kernel2 = layers.Conv2D(filters=64, kernel_size=(5, 5), padding='SAME', activation=None,
-                                kernel_initializer=tf.random.truncated_normal(stddev=0.1))(pool1)
-        conv2_norm = layers.BatchNormalization()(kernel2)
-        relu2 = layers.Activation('relu')(conv2_norm)
-        pool2 = layers.MaxPooling2D(pool_size=(2, 2), strides=(2, 2), padding='VALID')(relu2)
-
-        kernel3 = layers.Conv2D(filters=128, kernel_size=(3, 3), padding='SAME', activation=None,
-                                kernel_initializer=tf.random.truncated_normal(stddev=0.1))(pool2)
-        conv3_norm = layers.Normalization()(kernel3)
-        relu3 = layers.Activation('relu')(conv3_norm)
-        pool3 = layers.MaxPooling2D(pool_size=(1, 2), strides=(1, 2), padding='VALID')(relu3)
-
-        kernel4 = layers.Conv2D(filters=128, kernel_size=(3, 3), padding='SAME', activation=None,
-                                kernel_initializer=tf.random.truncated_normal(stddev=0.1))(pool3)
-        conv4_norm = layers.BatchNormalization()(kernel4)
-        relu4 = layers.Activation('relu')(conv4_norm)
-        pool4 = layers.MaxPooling2D(pool_size=(1, 2), strides=(1, 2), padding='VALID')(relu4)
-
-        kernel5 = layers.Conv2D(filters=256, kernel_size=(3, 3), padding='SAME', activation=None,
-                                kernel_initializer=tf.random.truncated_normal(stddev=0.1))(pool4)
-        conv5_norm = layers.BatchNormalization()(kernel5)
-        relu5 = layers.Activation('relu')(conv5_norm)
-        pool5 = layers.MaxPooling2D(pool_size=(1, 2), strides=(1, 2), padding='VALID')(relu5)
-
-        model = models.Model(inputs=input_tensor, outputs=pool5)
-
-        self.net = model
-
-
 class SimpleOCR:
     OCR_INPUT_SIZE = (80, 160, 1)
     RECOGNITION_CLASSES = 53
@@ -187,9 +143,9 @@ class SimpleOCR:
 
         self.model = models.Model(inputs=input_img, outputs=output)
 
-        # self.model.summary()
+        self.model.summary()
 
 
 if __name__ == '__main__':
-    east = EAST().model
+    # east = EAST().model
     simple_ocr = SimpleOCR().model
