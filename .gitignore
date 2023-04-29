@@ -126,9 +126,6 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-# Trained weights
-*.pt
-
 # Misc.
 *.npy
 raw_data/bsvso
@@ -136,4 +133,3 @@ raw_data/icdar_composite
 source/wandb
 source/yolo_saved
 source/east_saved
-source/ocr_saved
